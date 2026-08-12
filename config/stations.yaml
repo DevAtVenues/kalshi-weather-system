@@ -1,0 +1,229 @@
+# Kalshi weather market cities with their settlement stations.
+# nws_station: the NWS CLI report station Kalshi settles on (verify per market rules).
+# metar_station: same station — all are on the ASOS/METAR network.
+# kalshi_series: primary active Kalshi series ticker for this city.
+# lst_offset_hours: UTC offset in standard time (no DST); settlement day boundary.
+#
+# NYC settles on KNYC (Central Park), not an airport.
+# Chicago settles on KMDW (Midway), NOT KORD (O'Hare) — confirmed from contract rules.
+# DO NOT assume the main commercial airport. Verify each city from its market rules page.
+
+NYC:
+  city: "New York City"
+  nws_station: "KNYC"
+  metar_station: "KNYC"
+  kalshi_series: "KXHIGHNY"
+  kalshi_low_series: "KXLOWTNYC"
+  lat: 40.7789
+  lon: -73.9692
+  timezone: "America/New_York"
+  lst_offset_hours: -5
+
+CHI:
+  city: "Chicago"
+  nws_station: "KMDW"   # Kalshi KXHIGHCHI settles on NWS CLI at Midway, NOT O'Hare
+  metar_station: "KMDW"
+  kalshi_series: "KXHIGHCHI"
+  kalshi_low_series: "KXLOWTCHI"
+  lat: 41.7860
+  lon: -87.7522
+  timezone: "America/Chicago"
+  lst_offset_hours: -6
+
+MIA:
+  city: "Miami"
+  nws_station: "KMIA"
+  metar_station: "KMIA"
+  kalshi_series: "KXHIGHMIA"
+  kalshi_low_series: "KXLOWTMIA"
+  lat: 25.7959
+  lon: -80.2870
+  timezone: "America/New_York"
+  lst_offset_hours: -5
+
+LAX:
+  city: "Los Angeles"
+  nws_station: "KLAX"
+  metar_station: "KLAX"
+  kalshi_series: "KXHIGHLAX"
+  kalshi_low_series: "KXLOWTLAX"
+  lat: 33.9425
+  lon: -118.4081
+  timezone: "America/Los_Angeles"
+  lst_offset_hours: -8
+
+DEN:
+  city: "Denver"
+  nws_station: "KDEN"
+  metar_station: "KDEN"
+  kalshi_series: "KXHIGHDEN"
+  kalshi_low_series: "KXLOWTDEN"
+  lat: 39.8561
+  lon: -104.6737
+  timezone: "America/Denver"
+  lst_offset_hours: -7
+
+PHX:
+  city: "Phoenix"
+  nws_station: "KPHX"
+  metar_station: "KPHX"
+  kalshi_series: "KXHIGHTPHX"
+  kalshi_low_series: "KXLOWTPHX"
+  lat: 33.4373
+  lon: -112.0078
+  timezone: "America/Phoenix"
+  lst_offset_hours: -7
+
+ATL:
+  city: "Atlanta"
+  nws_station: "KATL"
+  metar_station: "KATL"
+  kalshi_series: "KXHIGHTATL"
+  kalshi_low_series: "KXLOWTATL"
+  lat: 33.6367
+  lon: -84.4281
+  timezone: "America/New_York"
+  lst_offset_hours: -5
+
+HOU:
+  city: "Houston"
+  nws_station: "KHOU"
+  metar_station: "KHOU"
+  kalshi_series: "KXHIGHTHOU"
+  kalshi_low_series: "KXLOWTHOU"
+  lat: 29.6454
+  lon: -95.2789
+  timezone: "America/Chicago"
+  lst_offset_hours: -6
+
+DAL:
+  city: "Dallas"
+  nws_station: "KDFW"
+  metar_station: "KDFW"
+  kalshi_series: "KXHIGHTDAL"
+  kalshi_low_series: "KXLOWTDAL"
+  lat: 32.8998
+  lon: -97.0403
+  timezone: "America/Chicago"
+  lst_offset_hours: -6
+
+SEA:
+  city: "Seattle"
+  nws_station: "KSEA"
+  metar_station: "KSEA"
+  kalshi_series: "KXHIGHTSEA"
+  kalshi_low_series: "KXLOWTSEA"
+  lat: 47.4502
+  lon: -122.3088
+  timezone: "America/Los_Angeles"
+  lst_offset_hours: -8
+
+PHL:
+  city: "Philadelphia"
+  nws_station: "KPHL"
+  metar_station: "KPHL"
+  kalshi_series: "KXHIGHPHIL"
+  kalshi_low_series: "KXLOWTPHIL"
+  lat: 39.8719
+  lon: -75.2411
+  timezone: "America/New_York"
+  lst_offset_hours: -5
+
+SFO:
+  city: "San Francisco"
+  nws_station: "KSFO"
+  metar_station: "KSFO"
+  kalshi_series: "KXHIGHTSFO"
+  kalshi_low_series: "KXLOWTSFO"
+  lat: 37.6188
+  lon: -122.3750
+  timezone: "America/Los_Angeles"
+  lst_offset_hours: -8
+
+LAS:
+  city: "Las Vegas"
+  nws_station: "KLAS"
+  metar_station: "KLAS"
+  kalshi_series: "KXHIGHTLV"
+  kalshi_low_series: "KXLOWTLV"
+  lat: 36.0840
+  lon: -115.1537
+  timezone: "America/Los_Angeles"
+  lst_offset_hours: -8
+
+BOS:
+  city: "Boston"
+  nws_station: "KBOS"
+  metar_station: "KBOS"
+  kalshi_series: "KXHIGHTBOS"
+  kalshi_low_series: "KXLOWTBOS"
+  lat: 42.3643
+  lon: -71.0052
+  timezone: "America/New_York"
+  lst_offset_hours: -5
+
+MSP:
+  city: "Minneapolis"
+  nws_station: "KMSP"
+  metar_station: "KMSP"
+  kalshi_series: "KXHIGHTMIN"
+  kalshi_low_series: "KXLOWTMIN"
+  lat: 44.8848
+  lon: -93.2223
+  timezone: "America/Chicago"
+  lst_offset_hours: -6
+
+SAT:
+  city: "San Antonio"
+  nws_station: "KSAT"
+  metar_station: "KSAT"
+  kalshi_series: "KXHIGHTSATX"
+  kalshi_low_series: "KXLOWTSATX"
+  lat: 29.5337
+  lon: -98.4698
+  timezone: "America/Chicago"
+  lst_offset_hours: -6
+
+OKC:
+  city: "Oklahoma City"
+  nws_station: "KOKC"
+  metar_station: "KOKC"
+  kalshi_series: "KXHIGHTOKC"
+  kalshi_low_series: "KXLOWTOKC"
+  lat: 35.3931
+  lon: -97.6007
+  timezone: "America/Chicago"
+  lst_offset_hours: -6
+
+DCA:
+  city: "Washington DC"
+  nws_station: "KDCA"
+  metar_station: "KDCA"
+  kalshi_series: "KXHIGHTDC"
+  kalshi_low_series: "KXLOWTDC"
+  lat: 38.8521
+  lon: -77.0377
+  timezone: "America/New_York"
+  lst_offset_hours: -5
+
+MSY:
+  city: "New Orleans"
+  nws_station: "KMSY"
+  metar_station: "KMSY"
+  kalshi_series: "KXHIGHTNOLA"
+  kalshi_low_series: "KXLOWTNOLA"
+  lat: 29.9934
+  lon: -90.2580
+  timezone: "America/Chicago"
+  lst_offset_hours: -6
+
+AUS:
+  city: "Austin"
+  nws_station: "KAUS"
+  metar_station: "KAUS"
+  kalshi_series: "KXHIGHAUS"
+  kalshi_low_series: "KXLOWTAUS"
+  lat: 30.1945
+  lon: -97.6699
+  timezone: "America/Chicago"
+  lst_offset_hours: -6

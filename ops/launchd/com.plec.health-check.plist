@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.health-check</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/.venv/bin/python</string>
+        <string>scripts/health_check.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project</string>
+    <!-- Hourly: a dead logger is unrecoverable data, and at 4x/day the worst-case
+         detection latency was ~6h. Pushes are transition-gated with a 6h cooldown
+         inside the script, so hourly checks do NOT mean hourly pings — a stable
+         red set alerts once. RunAtLoad also fires a check on login/wake. -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/health/health_check.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/health/health_check.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

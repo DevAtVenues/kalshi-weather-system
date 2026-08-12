@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalshi Weather Monitor</title>
+<style>
+:root {
+  --bg:           #070e07;
+  --bg-panel:     #0a140a;
+  --bg-header:    #0d1c0d;
+  --bg-row-alt:   rgba(255,255,255,0.018);
+  --border:       #1a341a;
+  --text:         #9dbf9d;
+  --text-dim:     #4a6a4a;
+  --text-bright:  #d4ecd4;
+  --accent:       #00e87a;
+  --tab-act-bg:   #133513;
+  --tab-act-fg:   #00e87a;
+  --tab-idle-fg:  #4a7a4a;
+  --yes:          #00e87a;
+  --no:           #ff4d4d;
+  --low:          #00d4ff;
+  --warn:         #ffcc00;
+  --row-yes:      rgba(0,232,122,0.07);
+  --row-no:       rgba(255,77,77,0.07);
+  --row-warn:     rgba(255,204,0,0.06);
+  --row-low:      rgba(0,212,255,0.06);
+  --high-fg:      #ff9966;
+  --low-fg:       #66aaff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Courier New',monospace;font-size:12px}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.hdr{
+  display:flex;align-items:center;gap:16px;
+  padding:10px 18px;
+  background:var(--bg-header);
+  border-bottom:1px solid var(--border);
+}
+.hdr-title{color:var(--accent);font-size:14px;font-weight:bold;letter-spacing:2px}
+.hdr-clock{color:var(--text-dim);font-size:11px;margin-left:auto}
+.hdr-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 6px var(--accent);
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Tabs ────────────────────────────────────────────────────────── */
+.tabs{
+  display:flex;gap:2px;padding:0 18px;
+  background:var(--bg-header);border-bottom:1px solid var(--border);
+}
+.tab{
+  padding:7px 18px;cursor:pointer;border:none;
+  background:transparent;color:var(--tab-idle-fg);
+  font-family:inherit;font-size:11px;letter-spacing:1.5px;
+  border-bottom:2px solid transparent;transition:all .15s;
+}
+.tab.active{color:var(--tab-act-fg);border-bottom-color:var(--tab-act-fg)}
+.tab:hover:not(.active){color:var(--text);border-bottom-color:var(--border)}
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+.status{
+  display:flex;align-items:center;gap:20px;
+  padding:5px 18px;
+  background:var(--bg-panel);border-bottom:1px solid var(--border);
+  font-size:10px;color:var(--text-dim);
+}
+.status .val{color:var(--text)}
+.refresh-btn{
+  margin-left:auto;padding:3px 10px;
+  background:transparent;border:1px solid var(--border);
+  color:var(--text-dim);cursor:pointer;
+  font-family:inherit;font-size:10px;border-radius:2px;letter-spacing:1px;
+}
+.refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+.spinner{display:inline-block;width:7px;height:7px;border:1px solid var(--text-dim);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:4px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Tab content ─────────────────────────────────────────────────── */
+.pane{display:none;padding:16px 18px}
+.pane.active{display:block}
+
+/* ── Legend ──────────────────────────────────────────────────────── */
+.legend{display:flex;gap:18px;margin-bottom:12px;font-size:10px;letter-spacing:.5px}
+.leg{display:flex;align-items:center;gap:5px}
+.leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* ── Section header (Locks page) ─────────────────────────────────── */
+.sec-hdr{
+  font-size:10px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;
+  padding:14px 0 6px;border-bottom:1px solid var(--border);margin-bottom:2px;
+}
+.no-data-msg{color:var(--text-dim);padding:30px;text-align:center;letter-spacing:1px}
+
+/* ── Table ───────────────────────────────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{
+  text-align:left;padding:5px 10px;
+  color:var(--text-dim);font-weight:normal;
+  font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+  background:var(--bg-panel);border-bottom:1px solid var(--border);
+}
+.tbl td{
+  padding:7px 10px;
+  border-bottom:1px solid rgba(26,52,26,.35);
+  vertical-align:middle;white-space:nowrap;
+}
+.tbl tbody tr:nth-child(even) td{background:var(--bg-row-alt)}
+.tbl tbody tr:hover td{background:rgba(255,255,255,.03)}
+
+/* Row state overrides */
+.r-yes td{background:var(--row-yes)!important}
+.r-no  td{background:var(--row-no) !important}
+.r-warn td{background:var(--row-warn)!important}
+.r-low td{background:var(--row-low) !important}
+
+/* ── Badges ──────────────────────────────────────────────────────── */
+.badge{
+  display:inline-block;padding:2px 7px;
+  border-radius:2px;font-size:10px;font-weight:bold;letter-spacing:.5px;
+}
+.b-yes {color:var(--yes);border:1px solid var(--yes)}
+.b-no  {color:var(--no); border:1px solid var(--no)}
+.b-low {color:var(--low);border:1px solid var(--low)}
+.b-warn{color:var(--warn);border:1px solid var(--warn)}
+.b-dim {color:var(--text-dim)}
+
+/* ── Number colours ──────────────────────────────────────────────── */
+.hi {color:var(--high-fg)}
+.lo {color:var(--low-fg)}
+.br {color:var(--text-bright)}
+.dim{color:var(--text-dim)}
+.yes-fg  {color:var(--yes);font-weight:bold}
+.no-fg   {color:var(--no); font-weight:bold}
+.warn-fg {color:var(--warn)}
+.low-fg  {color:var(--low)}
+
+/* ── Price ───────────────────────────────────────────────────────── */
+.price{color:#88cc99}
+
+/* ── Picks tab ───────────────────────────────────────────────────── */
+.pick-list { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; }
+.pick-card {
+  display: grid;
+  grid-template-columns: 28px 110px 56px 170px 1fr 150px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 3px;
+  border-left: 3px solid transparent;
+  background: var(--bg-panel);
+  font-size: 12px;
+}
+.pick-card:hover { background: rgba(255,255,255,.03) }
+
+/* rank number */
+.pick-rank { color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+
+/* type badge */
+.pick-badge {
+  display: inline-block; padding: 2px 5px; border-radius: 2px;
+  font-size: 9px; font-weight: bold; letter-spacing: .4px;
+  white-space: nowrap;
+}
+.badge-lock     { background: rgba(0,200,80,.15);  color: var(--yes);  border: 1px solid var(--yes) }
+.badge-near     { background: rgba(255,200,0,.1);  color: var(--warn); border: 1px solid var(--warn) }
+.badge-cal      { background: rgba(68,153,255,.12);color: #6ab0ff;     border: 1px solid #4499ff }
+.badge-gauss    { background: rgba(120,120,160,.1);color: #9999cc;     border: 1px solid #6666aa }
+.badge-gfs      { background: rgba(80,80,100,.15); color: var(--text-dim); border: 1px solid var(--border) }
+.badge-watch    { background: transparent;          color: var(--text-dim); border: 1px solid var(--border) }
+
+/* left border colours matching badge */
+.pick-lock-yes { border-left-color: var(--yes) }
+.pick-lock-no  { border-left-color: var(--no)  }
+.pick-near     { border-left-color: var(--warn) }
+.pick-cal      { border-left-color: #4499ff }
+.pick-gauss    { border-left-color: #6666aa }
+.pick-gfs-card { border-left-color: #445566 }
+.pick-watch-card { border-left-color: var(--border) }
+
+.pick-city  { font-weight: bold; color: var(--text-bright); font-size: 12px; }
+.pick-action-yes  { color: var(--yes); font-weight: bold; font-size: 11px; letter-spacing: .5px }
+.pick-action-no   { color: var(--no);  font-weight: bold; font-size: 11px; letter-spacing: .5px }
+.pick-action-watch{ color: var(--warn);font-weight: bold; font-size: 11px; }
+.pick-reason { color: var(--text); font-size: 11px }
+.pick-price  { font-size: 11px; text-align: right; line-height: 1.6 }
+.pick-price .spread   { color: #88cc99 }
+.pick-price .entry-yes{ color: var(--yes); font-size: 10px }
+.pick-price .entry-no { color: var(--no);  font-size: 10px }
+.pick-price .no-quote { color: var(--text-dim); font-size: 10px; font-style: italic }
+.pick-place-time {
+  grid-column: 1 / -1; margin-top: 4px; display: flex; align-items: baseline;
+  gap: 8px; flex-wrap: wrap; font-size: 11px;
+}
+.pick-place-time .place-clock {
+  font-weight: 700; color: #ffcf66; letter-spacing: .3px; white-space: nowrap;
+}
+.pick-place-time.place-now .place-clock { color: var(--yes); }
+.pick-place-time .place-note { color: var(--text-dim); font-size: 10px; }
+.pick-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0; opacity: .4; }
+.empty-picks { color: var(--text-dim); padding: 20px; text-align: center; letter-spacing: 1px }
+.picks-section-header {
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-dim);
+  text-transform: uppercase; padding: 14px 4px 4px; border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.picks-section-low { margin-top: 18px; color: #6af; border-color: #6af4; }
+.pick-trade-link { grid-column: 1 / -1; text-align: right; margin-top: 2px; }
+.pick-trade-link a { font-size: 10px; color: #4af; text-decoration: none; letter-spacing: .5px; border: 1px solid #4af; border-radius: 3px; padding: 1px 6px; }
+.pick-trade-link a:hover { background: rgba(68,170,255,.15); }
+
+/* ── Pick meta row (spread warning + OOS badge) ──────────────────── */
+.pick-meta {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 3px; padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,.05);
+  flex-wrap: wrap;
+}
+.pick-spread-warn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 2px; font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  background: rgba(255,204,0,.10); color: var(--warn); border: 1px solid rgba(255,204,0,.35);
+}
+.oos-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 2px; font-size: 10px; letter-spacing: .4px;
+}
+.oos-pos  { background: rgba(0,232,122,.08);  color: #66dd99; border: 1px solid rgba(0,232,122,.3) }
+.oos-zero { background: rgba(255,204,0,.08);  color: #ccaa44; border: 1px solid rgba(255,204,0,.25) }
+.oos-none { background: transparent;           color: var(--text-dim); border: 1px solid rgba(255,255,255,.1) }
+.pick-weather-warn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 2px; font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  background: rgba(80,160,255,.10); color: #6aadff; border: 1px solid rgba(80,160,255,.35);
+}
+
+/* ── Model-pick credibility (P-vs-P + verdict) ───────────────────────── */
+.pick-meta-v2 { grid-column: 1 / -1; margin-top: 4px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,.05); }
+.pick-compare { font-size: 11px; color: var(--text); margin-bottom: 4px; letter-spacing: .3px; }
+.pick-compare b { color: var(--text-bright); font-weight: 700; }
+.pick-compare .dim { color: var(--text-dim); font-size: 10px; }
+.pick-verdict { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.verdict-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 700; letter-spacing: .5px; white-space: nowrap;
+}
+.verdict-ok     { background: rgba(0,232,122,.12); color: var(--yes); border: 1px solid rgba(0,232,122,.4); }
+.verdict-warn   { background: rgba(255,204,0,.10); color: var(--warn); border: 1px solid rgba(255,204,0,.35); }
+.verdict-reject { background: rgba(255,77,77,.12); color: var(--no); border: 1px solid rgba(255,77,77,.4); }
+.verdict-reasons { font-size: 10px; color: var(--text-dim); letter-spacing: .2px; }
+.pick-card-filtered { opacity: .5; }
+.picks-section-filtered { margin-top: 18px; color: var(--no); border-color: rgba(255,77,77,.3); }
+
+/* ── Forecast diff ───────────────────────────────────────────────── */
+.diff-pos{color:var(--high-fg)}
+.diff-neg{color:var(--low-fg)}
+.diff-neu{color:var(--text-dim)}
+
+/* ── Track Record tab ───────────────────────────────────────────── */
+.rec-title { font-size: 22px; font-weight: 700; color: var(--text-bright); margin: 0 0 4px 0; letter-spacing: .5px }
+.rec-sub   { font-size: 11px; color: var(--text-dim); margin: 0 0 28px 0; letter-spacing: 1px }
+.rec-section-hdr {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  color: var(--text-dim); margin: 28px 0 10px 0; text-transform: uppercase;
+}
+.rec-verified-note {
+  font-size: 11px; color: var(--text-dim); margin: -6px 0 18px 0; font-style: italic;
+}
+.rec-stats { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 4px }
+.rec-stat-card {
+  flex: 1; min-width: 140px; max-width: 220px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 4px; padding: 14px 18px;
+}
+.rec-stat-label  { font-size: 9px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase }
+.rec-stat-value  { font-size: 30px; font-weight: 700; line-height: 1; margin-bottom: 4px }
+.rec-stat-detail { font-size: 10px; color: var(--text-dim) }
+.rec-gold   { color: #e6a817 }
+.rec-green  { color: var(--yes) }
+.rec-red    { color: var(--no) }
+.rec-dim    { color: var(--text-dim) }
+
+.rec-table {
+  width: 100%; border-collapse: collapse;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 4px; overflow: hidden; margin-bottom: 4px;
+}
+.rec-table th {
+  padding: 10px 14px; font-size: 9px; letter-spacing: 2px;
+  color: var(--text-dim); text-align: left; font-weight: 600;
+  border-bottom: 1px solid var(--border); background: rgba(255,255,255,.02);
+}
+.rec-table th:not(:first-child) { text-align: center }
+.rec-table td {
+  padding: 11px 14px; font-size: 13px; font-weight: 500;
+  border-bottom: 1px solid rgba(255,255,255,.04); color: var(--text-bright);
+}
+.rec-table td:not(:first-child) { text-align: center }
+.rec-table tr:last-child td { border-bottom: none }
+.rec-table tr:hover td { background: rgba(255,255,255,.025) }
+.rec-w   { color: var(--yes); font-weight: 700 }
+.rec-l   { color: var(--no);  font-weight: 700 }
+.rec-l0  { color: var(--text-dim); font-weight: 400 }
+.rec-wr  { font-weight: 700 }
+.rec-wr-hi  { color: #e6a817 }
+.rec-wr-mid { color: #c8891a }
+.rec-wr-lo  { color: #aa4422 }
+.rec-pending-list { margin-top: 10px }
+.rec-pending-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,.04);
+  font-size: 12px;
+}
+.rec-open-pill {
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  padding: 2px 8px; border-radius: 10px;
+  background: rgba(230,168,23,.15); color: #e6a817; border: 1px solid rgba(230,168,23,.35);
+}
+.rec-pending-remove {
+  margin-left: auto; background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 14px; padding: 0 4px; line-height: 1;
+}
+.rec-pending-remove:hover { color: var(--no) }
+.rec-day-row:hover td { background: rgba(255,255,255,.03) }
+.rec-day-detail-box {
+  background: rgba(255,255,255,.02); border-top: 1px solid rgba(255,255,255,.06);
+  padding: 4px 0;
+}
+.rec-detail-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 18px 7px 28px; font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,.03);
+}
+.rec-detail-row:last-child { border-bottom: none }
+.rec-hdr-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px }
+.rec-add-btn {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 5px 14px;
+  background: rgba(0,232,122,.1); color: var(--yes); border: 1px solid rgba(0,232,122,.35);
+  border-radius: 3px; cursor: pointer;
+}
+.rec-add-btn:hover { background: rgba(0,232,122,.2) }
+/* Log-trade modal */
+.lt-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 999;
+  display: flex; align-items: center; justify-content: center;
+}
+.lt-modal {
+  background: #1a1c22; border: 1px solid var(--border); border-radius: 6px;
+  padding: 28px 32px; width: 420px; max-width: 95vw;
+}
+.lt-modal h3 { margin: 0 0 20px; font-size: 16px; color: var(--text-bright); letter-spacing: .5px }
+.lt-row { display: flex; gap: 12px; margin-bottom: 14px }
+.lt-field { display: flex; flex-direction: column; flex: 1 }
+.lt-field label { font-size: 9px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 5px; text-transform: uppercase }
+.lt-field input, .lt-field select {
+  background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-bright);
+  border-radius: 3px; padding: 7px 10px; font-size: 13px; outline: none;
+}
+.lt-field input:focus, .lt-field select:focus { border-color: #4af }
+.lt-field select option { background: #1a1c22 }
+.lt-btns { display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end }
+.lt-submit {
+  padding: 8px 22px; background: rgba(0,232,122,.15); color: var(--yes);
+  border: 1px solid rgba(0,232,122,.4); border-radius: 3px; cursor: pointer; font-weight: 700; font-size: 13px;
+}
+.lt-submit:hover { background: rgba(0,232,122,.28) }
+.lt-cancel {
+  padding: 8px 16px; background: none; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: 3px; cursor: pointer; font-size: 13px;
+}
+.lt-cancel:hover { color: var(--text-bright) }
+.pick-log-btn {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px; padding: 2px 8px;
+  background: rgba(0,232,122,.08); color: var(--yes); border: 1px solid rgba(0,232,122,.28);
+  border-radius: 3px; cursor: pointer; text-decoration: none;
+}
+.pick-log-btn:hover { background: rgba(0,232,122,.18) }
+.rec-pending-row:last-child { border-bottom: none }
+.rec-pending-ticker { color: var(--text-dim); font-family: monospace; font-size: 11px; flex: 1 }
+.rec-pending-date   { color: var(--text-dim); font-size: 11px; min-width: 80px }
+.rec-pending-action-no  { color: var(--no);  font-weight: 700; font-size: 11px; min-width: 60px }
+.rec-pending-action-yes { color: var(--yes); font-weight: 700; font-size: 11px; min-width: 60px }
+
+/* ── Weather risk badges ──────────────────────────────────────────── */
+.wrisk { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:3px; font-size:9px; font-weight:700; letter-spacing:1.2px; white-space:nowrap }
+.wrisk-safe   { background:rgba(0,232,122,.12);  color:#00e87a; border:1px solid rgba(0,232,122,.3) }
+.wrisk-watch  { background:rgba(255,204,0,.12);  color:#ffcc00; border:1px solid rgba(255,204,0,.3) }
+.wrisk-danger { background:rgba(255,77,77,.14);  color:#ff4d4d; border:1px solid rgba(255,77,77,.3) }
+.wrisk-tags   { font-size:9px; color:var(--text-dim); margin-left:4px }
+
+/* ── Lock cards ───────────────────────────────────────────────────── */
+.lock-section-hdr {
+  font-size: 11px; font-weight: 700; letter-spacing: 2px;
+  color: var(--text-dim); padding: 18px 0 10px 4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.lock-section-hdr .lock-hdr-icon { font-size: 13px }
+.lock-hdr-act  { color: #00e87a }
+.lock-hdr-exp  { color: #e6a817 }
+.lock-hdr-near { color: #aaaaaa }
+
+.lock-grid { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 24px }
+
+.lock-card {
+  background: #060f06;
+  border: 1px solid #1a401a;
+  border-radius: 6px;
+  padding: 16px 18px 14px;
+  min-width: 260px;
+  flex: 1 1 260px;
+  max-width: 340px;
+  position: relative;
+}
+.lock-card-act  { border-color: #00e87a; box-shadow: 0 0 12px rgba(0,232,122,.10) }
+.lock-card-exp  { border-color: #5a4010; background: #080c06 }
+.lock-card-near { border-color: #2a2a2a }
+
+.lock-card-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2px }
+.lock-card-city { font-size: 16px; font-weight: 700; color: var(--text-bright) }
+.lock-card-sub  { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 8px }
+
+.lock-badge-act  { font-size: 9px; font-weight:700; letter-spacing:1px; color:#00e87a; background:rgba(0,232,122,.1); border:1px solid rgba(0,232,122,.4); border-radius:3px; padding:2px 7px }
+.lock-badge-exp  { font-size: 9px; font-weight:700; letter-spacing:1px; color:#e6a817; background:rgba(230,168,23,.1); border:1px solid rgba(230,168,23,.4); border-radius:3px; padding:2px 7px }
+.lock-badge-near { font-size: 9px; font-weight:700; letter-spacing:1px; color:#aaa; background:rgba(180,180,180,.08); border:1px solid rgba(180,180,180,.2); border-radius:3px; padding:2px 7px }
+
+.lock-action { font-size: 28px; font-weight: 900; letter-spacing: 1px; margin: 8px 0 0; line-height: 1 }
+.lock-action-yes { color: #00e87a }
+.lock-action-no  { color: #ff4d4d }
+.lock-running-h  { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; margin-top: 2px }
+
+.lock-temp { font-size: 42px; font-weight: 700; color: #00e87a; line-height: 1; margin: 6px 0 4px }
+.lock-temp-near { color: #888 }
+.lock-floor-line { font-size: 10px; color: #4a7a4a; margin-bottom: 10px }
+.lock-floor-line .lfl-check { color: #00e87a }
+.lock-floor-line .lfl-warn  { color: #ff4d4d }
+
+.lock-bracket-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; border-top: 1px solid rgba(255,255,255,.04);
+  font-size: 11px;
+}
+.lock-bracket-label { color: var(--text-dim) }
+.lock-bracket-label .lbl-leader { color: #e6a817; font-weight: 700 }
+.lock-bracket-label .lbl-icon { font-size: 11px; margin-right: 4px }
+.lock-bracket-price { color: var(--text-bright); font-size: 11px; font-variant-numeric: tabular-nums }
+.lock-bracket-price .lbp-null { color: var(--text-dim) }
+
+.lock-confirm-line { font-size: 9px; color: #4a7a4a; margin-top: 8px; display:flex; align-items:center; gap:4px }
+.lock-confirm-line .lcl-check { color: #00e87a }
+.lock-confirm-line .lcl-near  { color: #888 }
+
+.lock-bottom { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px }
+
+.lock-trade-btn {
+  display: inline-block; padding: 5px 14px; border-radius: 4px;
+  background: rgba(0,232,122,.15); border: 1px solid rgba(0,232,122,.5);
+  color: #00e87a; font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-decoration: none; cursor: pointer;
+}
+.lock-trade-btn:hover { background: rgba(0,232,122,.25) }
+.lock-trade-btn-exp {
+  background: rgba(230,168,23,.10); border-color: rgba(230,168,23,.3); color: #e6a817;
+}
+.lock-trade-btn-exp:hover { background: rgba(230,168,23,.2) }
+
+/* ── Glossary ─────────────────────────────────────────────────────── */
+.gloss { margin: 0; padding: 0 }
+.gloss dt {
+  color: var(--accent); font-weight: 700; font-size: 13px;
+  margin-top: 18px; margin-bottom: 2px; letter-spacing: .3px;
+}
+.gloss dd {
+  color: var(--text-bright); font-size: 12px; margin: 0 0 0 16px;
+  line-height: 1.7; color: #bbb;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="hdr-dot"></div>
+  <div class="hdr-title">KALSHI WEATHER MONITOR</div>
+  <div class="hdr-clock" id="clock">—</div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="show('live')">LIVE</button>
+  <button class="tab"        onclick="show('locks')">LOCKS</button>
+  <button class="tab"        onclick="show('forecast')">FORECAST</button>
+  <button class="tab"        onclick="show('picks')">PICKS</button>
+  <button class="tab"        onclick="show('record')">RECORD</button>
+  <button class="tab"        onclick="show('glossary')">GLOSSARY</button>
+</div>
+
+<!-- Stale forecast warning banner -->
+<div id="stale-banner" style="display:none;background:#3a0a0a;color:var(--no);padding:6px 18px;font-size:11px;border-bottom:1px solid #5a1a1a;letter-spacing:1px">
+  ⚠ FORECAST DATA STALE — GFS picks may be inaccurate. Restart the dashboard to force a refresh.
+</div>
+
+<!-- Status bar -->
+<div class="status">
+  <span>METAR <span class="val" id="s-metar">—</span></span>
+  <span>Prices <span class="val" id="s-prices">—</span></span>
+  <span>GFS <span class="val" id="s-gfs">—</span></span>
+  <span>Ensemble <span class="val" id="s-ens">—</span></span>
+  <span id="s-spin"></span>
+  <button id="gfs-refresh-btn" onclick="forceRefreshForecast()" style="background:#0a1a0a;color:var(--text-dim);border:1px solid var(--border);padding:2px 8px;font-family:inherit;font-size:10px;cursor:pointer;letter-spacing:1px" title="Force-refresh GFS forecasts (takes ~2 min)">↻ GFS</button>
+  <button class="refresh-btn" onclick="load()">↻ REFRESH</button>
+</div>
+
+<!-- ── LIVE pane ──────────────────────────────────────────────────── -->
+<div class="pane active" id="pane-live">
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:var(--yes)"></div>YES LOCK</div>
+    <div class="leg"><div class="leg-dot" style="background:var(--no)"></div>NO LOCK</div>
+    <div class="leg"><div class="leg-dot" style="background:var(--warn)"></div>APPROACHING (&lt;3°F)</div>
+    <div class="leg"><div class="leg-dot" style="background:var(--low)"></div>LOW CONFIRMED</div>
+  </div>
+  <table class="tbl">
+    <thead><tr>
+      <th>City</th>
+      <th>Station</th>
+      <th>Temp</th>
+      <th>Forecast H (mean±)</th>
+      <th>Day H / L</th>
+      <th>Lock Status</th>
+      <th>Weather</th>
+      <th>ATM Contract</th>
+      <th>Bid / Ask</th>
+      <th>Obs</th>
+      <th>#</th>
+    </tr></thead>
+    <tbody id="live-body"><tr><td colspan="11" class="no-data-msg">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- ── LOCKS pane ─────────────────────────────────────────────────── -->
+<div class="pane" id="pane-locks">
+  <div id="locks-body" style="padding:8px 18px 24px"><p class="no-data-msg">Loading…</p></div>
+</div>
+
+<!-- ── PICKS pane ─────────────────────────────────────────────────── -->
+<div class="pane" id="pane-picks">
+  <div id="picks-body"><p class="empty-picks">Loading…</p></div>
+</div>
+
+<!-- ── RECORD pane ────────────────────────────────────────────────── -->
+<div class="pane" id="pane-record">
+  <div id="record-body" style="padding:24px 18px;max-width:900px">
+    <p class="no-data-msg">Loading…</p>
+  </div>
+</div>
+
+<!-- ── GLOSSARY pane ──────────────────────────────────────────────── -->
+<div class="pane" id="pane-glossary">
+  <div style="padding:24px 18px;max-width:760px;line-height:1.8">
+    <h2 style="color:var(--accent);margin-bottom:16px;letter-spacing:1px">GLOSSARY</h2>
+    <dl class="gloss">
+      <dt>Lock</dt>
+      <dd>A contract where the current running high temperature has already passed the strike threshold — the outcome is almost certain. Example: high is 91°F and the contract pays YES if high ≥ 90°F.</dd>
+
+      <dt>Near Lock</dt>
+      <dd>The running high is within 3°F of the strike, so the contract outcome is highly probable but not yet certain.</dd>
+
+      <dt>CALIBRATED badge</dt>
+      <dd>The model edge was computed using a station-specific bias correction — historical GFS forecast errors for that city were used to adjust the raw model probability. More reliable than Gaussian.</dd>
+
+      <dt>GAUSSIAN badge</dt>
+      <dd>The model edge was computed by fitting a normal distribution to the GFS ensemble, then reading off the probability of clearing the strike. Less precise than CALIBRATED — used when no historical bias data is available.</dd>
+
+      <dt>GFS badge</dt>
+      <dd>Edge signal comes from a single GFS deterministic run probability estimate, not a full ensemble calculation.</dd>
+
+      <dt>Edge</dt>
+      <dd>The difference between our model's probability and the market's implied probability (the mid-price). Edge must exceed fees + spread + a safety buffer before a trade is worth placing.</dd>
+
+      <dt>Market Mid</dt>
+      <dd>The midpoint between the YES bid and YES ask prices. Represents the market's consensus probability that the contract resolves YES.</dd>
+
+      <dt>Model P(YES)</dt>
+      <dd>The probability that the contract resolves YES according to our model. Compared against the market mid to identify edge.</dd>
+
+      <dt>YES / NO contracts</dt>
+      <dd>Each Kalshi weather contract has two sides. Buying YES pays $1 if the condition is met (e.g., high ≥ 90°F). Buying NO pays $1 if the condition is NOT met. Prices are in cents (0–100¢).</dd>
+
+      <dt>T-type contract (T88, T90, etc.)</dt>
+      <dd>A "threshold" contract — YES resolves if the daily high is less than (or greater than) the stated temperature. Example: T88 typically means YES if high &lt; 88°F.</dd>
+
+      <dt>B-type contract (B90.5, B92.5, etc.)</dt>
+      <dd>A "between" contract — YES resolves if the daily high falls within a 1°F band. Example: B90.5 means YES if 90°F ≤ high &lt; 91°F. Much harder to hit; often low-probability.</dd>
+
+      <dt>GFS</dt>
+      <dd>Global Forecast System — NOAA's primary deterministic weather model, updated every 6 hours. Our main forecast source.</dd>
+
+      <dt>GFS Ensemble (GEFS)</dt>
+      <dd>31 slightly perturbed versions of the GFS model run together. The spread across members gives a probability distribution, not just a single forecast.</dd>
+
+      <dt>ECMWF Ensemble (ENS)</dt>
+      <dd>51-member ensemble from the European Centre for Medium-Range Weather Forecasts. Often more accurate than GEFS, especially 3-7 days out.</dd>
+
+      <dt>LST (Local Standard Time)</dt>
+      <dd>The standard (non-daylight-saving) timezone for a city. Kalshi weather contracts settle on the NWS calendar day in LST — e.g., NYC uses EST (UTC-5) year-round for settlement purposes, not EDT.</dd>
+
+      <dt>NWS CLI / CF6</dt>
+      <dd>The official NWS Daily Climate Report. This is the exact temperature figure that Kalshi uses to settle weather contracts — not the app, not a weather website.</dd>
+
+      <dt>Settlement Station</dt>
+      <dd>The specific NWS observation station Kalshi uses for each city. NYC settles on KNYC (Central Park), not JFK or LGA. The station can differ from the city's main airport — always check the contract rules.</dd>
+
+      <dt>Running High</dt>
+      <dd>The highest temperature recorded at the settlement station so far today. Used to determine if a lock condition has already been met before the day ends.</dd>
+
+      <dt>Spread</dt>
+      <dd>The difference between the YES ask and YES bid prices. A wider spread means higher transaction cost. We add half the spread to our hurdle rate when calculating whether edge is sufficient.</dd>
+
+      <dt>Fill Model</dt>
+      <dd>Since we can't guarantee a limit order fills, we model it: maker fills only if a trade printed at or through our limit price; taker fills at the worst price in the bar. All results reported under both optimistic and pessimistic scenarios.</dd>
+
+      <dt>Taker Fee</dt>
+      <dd>Kalshi charges 0.07 × p × (1−p) per contract for market orders, where p is the YES price (0–1). At 50¢ YES, that's ~1.75¢/contract. Maker fees are ~25% of that.</dd>
+
+      <dt>Kelly Fraction</dt>
+      <dd>A formula for sizing bets proportional to edge and odds. We use ≤0.25× Kelly (fractional Kelly) to reduce variance. Never full Kelly — it maximizes long-run growth but risks large short-term drawdowns.</dd>
+
+      <dt>Circuit Breaker</dt>
+      <dd>A daily loss limit (currently 7% of bankroll). If cumulative losses on a given day hit this threshold, all trading stops for the rest of that day. Makes a catastrophic 30-40% loss day structurally impossible.</dd>
+
+      <dt>Block Bootstrap</dt>
+      <dd>A statistical method for computing confidence intervals when data points are correlated (e.g., a heat wave produces many correlated trading days). More honest than standard confidence intervals for weather data.</dd>
+
+      <dt>Walk-Forward Validation</dt>
+      <dd>Testing a strategy by training on historical data, then testing on the next unseen period, then rolling forward. More robust than a single train/test split — simulates how the strategy would actually behave over time.</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- ── FORECAST pane ──────────────────────────────────────────────── -->
+<div class="pane" id="pane-forecast">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th rowspan="2">City</th>
+        <th rowspan="2">Station</th>
+        <th colspan="3" style="text-align:center;border-bottom:1px solid #444">GFS Seamless
+          <span style="font-weight:400;font-size:10px;color:var(--text-dim)"> (raw → calibrated)</span></th>
+        <th rowspan="2">Current</th>
+        <th rowspan="2">Day High</th>
+        <th colspan="3" style="text-align:center;border-bottom:1px solid #444">Ensemble Members
+          <span style="font-weight:400;font-size:10px;color:var(--text-dim)">(mean ±σ)</span></th>
+        <th rowspan="2">ATM Contract</th>
+        <th rowspan="2">Mkt / Model</th>
+      </tr>
+      <tr>
+        <th>Raw High</th><th>Calibrated</th><th>Low</th>
+        <th style="color:#4499ff">GEFS</th>
+        <th style="color:#44cc88">ECMWF</th>
+        <th style="color:#ffaa44">ICON</th>
+      </tr>
+    </thead>
+    <tbody id="fc-body"><tr><td colspan="13" class="no-data-msg">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────────
+function show(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[onclick="show('${name}')"]`).classList.add('active');
+  document.getElementById('pane-' + name).classList.add('active');
+  if (name === 'record') loadRecord();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+function d(v, suffix='') {
+  return (v !== null && v !== undefined)
+    ? v + suffix
+    : '<span class="dim">—</span>';
+}
+
+function rowClass(status) {
+  return {yes_locked:'r-yes', no_locked:'r-no',
+          approaching_yes:'r-warn', approaching_no:'r-warn',
+          low_confirmed:'r-low'}[status] || '';
+}
+
+function badge(lock) {
+  const s = lock.status, l = esc(lock.label);
+  if (s === 'yes_locked')     return `<span class="badge b-yes">${l}</span>`;
+  if (s === 'no_locked')      return `<span class="badge b-no">${l}</span>`;
+  if (s === 'low_confirmed')  return `<span class="badge b-low">${l}</span>`;
+  if (s.startsWith('approach')) return `<span class="badge b-warn">${l}</span>`;
+  return `<span class="dim">—</span>`;
+}
+
+function tempClass(status) {
+  if (status === 'yes_locked')  return 'yes-fg';
+  if (status === 'no_locked')   return 'no-fg';
+  if (status.startsWith('approach')) return 'warn-fg';
+  if (status === 'low_confirmed') return 'low-fg';
+  return 'br';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function hlPair(h, l) {
+  if (h == null || l == null) return '<span class="dim">—</span>';
+  return `<span class="hi">${h}°</span> / <span class="lo">${l}°</span>`;
+}
+
+function multiModelCell(r) {
+  // Show mean ± spread prominently, then each model below in dim text
+  const mean   = r.model_mean_h;
+  const spread = r.model_spread_h;
+  const gfs    = r.gfs_h;
+  const ecmwf  = r.ecmwf_h;
+  const nbm    = r.nbm_h;
+
+  if (mean == null && gfs == null) return '<span class="dim">—</span>';
+
+  const spreadCls = spread == null ? 'dim'
+                  : spread <= 1.0 ? 'diff-neu'    // tight — high confidence
+                  : spread <= 3.0 ? 'diff-neg'    // moderate spread
+                  : 'no';                          // wide — low confidence
+
+  const meanStr   = mean   != null ? `<strong>${mean.toFixed(1)}°F</strong>` : `<strong>${gfs.toFixed(1)}°F</strong>`;
+  const spreadStr = spread != null
+    ? ` <span class="${spreadCls}" style="font-size:10px">±${(spread/2).toFixed(1)}°</span>`
+    : '';
+
+  const hrrr   = r.hrrr_h;
+  const parts = [];
+  if (gfs   != null) parts.push(`GFS ${gfs.toFixed(1)}`);
+  if (ecmwf != null) parts.push(`EC ${ecmwf.toFixed(1)}`);
+  if (nbm   != null) parts.push(`NBM ${nbm.toFixed(1)}`);
+  if (hrrr  != null) parts.push(`HRRR ${hrrr.toFixed(1)}`);
+  const detail = parts.length > 1
+    ? `<div style="font-size:9px;color:var(--text-dim)">${parts.join(' · ')}</div>`
+    : '';
+
+  return meanStr + spreadStr + detail;
+}
+
+function diffCell(gfsH, dayH) {
+  if (gfsH == null || dayH == null) return '<span class="dim">—</span>';
+  const d = (dayH - gfsH).toFixed(1);
+  const cls = d > 2 ? 'diff-pos' : d < -2 ? 'diff-neg' : 'diff-neu';
+  return `<span class="${cls}">${d > 0 ? '+' : ''}${d}°F</span>`;
+}
+
+// ── Render LIVE ────────────────────────────────────────────────────
+function weatherRiskHtml(wr) {
+  if (!wr) return '<span class="dim">—</span>';
+  const lvl   = wr.level || 'safe';
+  const cls   = lvl === 'danger' ? 'wrisk-danger' : lvl === 'watch' ? 'wrisk-watch' : 'wrisk-safe';
+  const label = lvl === 'danger' ? '🚫 DANGER' : lvl === 'watch' ? '⚠ WATCH' : '✅ SAFE';
+  const tags  = (wr.tags || []).join(' · ');
+  return `<span class="wrisk ${cls}" title="${esc(tags)}">${label}</span>`;
+}
+
+function renderLive(rows) {
+  const body = document.getElementById('live-body');
+  if (!rows.length) { body.innerHTML = '<tr><td colspan="11" class="no-data-msg">No data</td></tr>'; return; }
+  body.innerHTML = rows.map(r => {
+    const tc  = tempClass(r.lock.status);
+    const rc  = rowClass(r.lock.status);
+    const tmp = r.temp_f != null ? `<span class="${tc}">${r.temp_f}°F</span>` : '<span class="dim">—</span>';
+    const atm = r.atm_ticker ? `<span class="dim" style="font-size:10px">${esc(r.atm_ticker.split('-').slice(-1)[0])}</span>` : '<span class="dim">—</span>';
+    const price = (r.atm_bid != null)
+      ? `<span class="price">${r.atm_bid}¢ / ${r.atm_ask}¢</span>`
+      : '<span class="dim">—</span>';
+    return `<tr class="${rc}">
+      <td><span class="${tc}">${esc(r.city)}</span></td>
+      <td class="dim">${esc(r.station)}</td>
+      <td>${tmp}</td>
+      <td>${multiModelCell(r)}</td>
+      <td>${hlPair(r.day_h, r.day_l)}</td>
+      <td>${badge(r.lock)}</td>
+      <td>${weatherRiskHtml(r.weather_risk)}</td>
+      <td>${atm}</td>
+      <td>${price}</td>
+      <td class="dim" style="font-size:10px">${r.obs_time || '—'}</td>
+      <td class="dim">${r.readings}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render LOCKS ───────────────────────────────────────────────────
+function renderLocks(rows) {
+  // Only HIGH-contract locks (yes_locked / no_locked).
+  // low_confirmed = overnight LOW confirmation — irrelevant here.
+  const LOCK_STATUSES = ['yes_locked', 'no_locked'];
+  const locked      = rows.filter(r => LOCK_STATUSES.includes(r.lock.status))
+    .filter(r => { const eb = effectiveBid(r); return eb == null || eb < 99; });
+  const approaching = rows.filter(r => r.lock.status.startsWith('approach'));
+
+  if (!locked.length && !approaching.length) {
+    document.getElementById('locks-body').innerHTML =
+      '<p class="no-data-msg" style="padding:32px">No active locks or approaching thresholds right now.</p>';
+    return;
+  }
+
+  // Separate confirmed locks into actionable vs expensive (already fully priced).
+  // For NO LOCK the profit vehicle is buying NO, so effective price is 100 - yes_ask.
+  // For YES LOCK, expensive means YES bid near 100¢.
+  const EXPENSIVE_THRESHOLD = 85;
+  function effectiveBid(r) {
+    if (r.lock.status === 'no_locked') {
+      // NO side: bid = 100 - yes_ask, ask = 100 - yes_bid
+      return r.lock_ask != null ? (100 - r.lock_ask) : null;
+    }
+    return r.lock_bid; // YES lock: YES bid
+  }
+  const actNow    = locked.filter(r => { const eb = effectiveBid(r); return eb == null || eb < EXPENSIVE_THRESHOLD; });
+  const expensive = locked.filter(r => { const eb = effectiveBid(r); return eb != null && eb >= EXPENSIVE_THRESHOLD; });
+
+  function lockCardHtml(r, tier) {
+    // tier: 'act' | 'exp' | 'near'
+    const isAct  = tier === 'act';
+    const isNear = tier === 'near';
+    const cardCls  = isAct ? 'lock-card-act' : isNear ? 'lock-card-near' : 'lock-card-exp';
+    const badgeCls = isAct ? 'lock-badge-act' : isNear ? 'lock-badge-near' : 'lock-badge-exp';
+
+    // Parse settlement date from ticker (format: SERIES-26JUN13-STRIKE)
+    const _rawTk = (r.lock.ticker || r.atm_ticker || '').toUpperCase();
+    const _dtM   = _rawTk.match(/-(\d{2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{2})-/);
+    const _mons  = {JAN:'Jan',FEB:'Feb',MAR:'Mar',APR:'Apr',MAY:'May',JUN:'Jun',JUL:'Jul',AUG:'Aug',SEP:'Sep',OCT:'Oct',NOV:'Nov',DEC:'Dec'};
+    const settleDateLabel = _dtM ? `${_mons[_dtM[2]]} ${parseInt(_dtM[3])}` : '';
+
+    const badgeLabel = isAct  ? '🔒 LOCK CONFIRMED'
+                     : isNear ? `→ ${r.lock.threshold != null ? (r.lock.threshold - (r.day_h || r.temp_f || 0)).toFixed(1) + '°F to lock' : 'APPROACHING'}`
+                     : '🔒 LOCK DETECTED — EXPENSIVE';
+
+    const runningH = r.day_h != null ? r.day_h : r.temp_f;
+
+    // ── Action label (most prominent element on confirmed-lock cards) ──
+    const isYesLock = r.lock.status === 'yes_locked';
+    const isNoLock  = r.lock.status === 'no_locked';
+    let actionHtml = '';
+    if (!isNear) {
+      const actionText = isYesLock ? 'BUY YES' : isNoLock ? 'BUY NO' : '';
+      const actionCls  = isYesLock ? 'lock-action-yes' : 'lock-action-no';
+      if (actionText) {
+        actionHtml = `<div class="lock-action ${actionCls}">${actionText}</div>
+        <div class="lock-running-h">${runningH != null ? runningH + '°F running high' : ''}</div>`;
+      }
+    } else {
+      // Approaching: show running high as the big number (no confirmed action yet)
+      const tempStr = runningH != null ? `${Math.round(runningH)}°F` : '—';
+      actionHtml = `<div class="lock-temp lock-temp-near">${tempStr}</div>`;
+    }
+
+    // Floor / lock detail line
+    let floorLine = '';
+    const thr = r.lock.threshold;
+    const thrStr = thr != null ? thr.toFixed(0) + '°F' : '';
+    if (isYesLock && runningH != null) {
+      floorLine = `🔒 Running high ${runningH}°F confirmed ≥ ${thrStr} threshold <span class="lfl-check">✓</span>`;
+    } else if (isNoLock && runningH != null) {
+      floorLine = `<span class="lfl-warn">🚫 Running high ${runningH}°F exceeded ${thrStr} cap — YES is impossible</span>`;
+    } else if (isNear && runningH != null) {
+      floorLine = `→ Running high ${runningH}°F since midnight`;
+    }
+
+    // Lock contract bracket row (LEADER) — show correct side's price
+    let leaderRow = '';
+    if (r.lock.label && r.lock.label !== '—') {
+      let bidStr, askStr, priceLabel;
+      if (isNoLock) {
+        // Invert YES prices to show NO prices
+        const noBid = r.lock_ask != null ? (100 - r.lock_ask) : null;
+        const noAsk = r.lock_bid != null ? (100 - r.lock_bid) : null;
+        bidStr    = noBid != null ? `${noBid}¢` : '<span class="lbp-null">—</span>';
+        askStr    = noAsk != null ? `${noAsk}¢` : '<span class="lbp-null">—</span>';
+        priceLabel = 'NO ';
+      } else {
+        bidStr    = r.lock_bid  != null ? `${r.lock_bid}¢`  : '<span class="lbp-null">—</span>';
+        askStr    = r.lock_ask  != null ? `${r.lock_ask}¢`  : '<span class="lbp-null">—</span>';
+        priceLabel = 'YES ';
+      }
+      leaderRow = `
+        <div class="lock-bracket-row">
+          <span class="lock-bracket-label"><span class="lbl-icon">🥇</span><span class="lbl-leader">${esc(r.lock.label)}</span></span>
+          <span class="lock-bracket-price">${priceLabel}${bidStr} / ${askStr}</span>
+        </div>`;
+    }
+
+    // Confirm line
+    const confirmText = isNear
+      ? `<span class="lcl-near">⏳ ${esc(r.lock.detail || 'approaching threshold')}</span>`
+      : `<span class="lcl-check">✅</span> Lock confirmed · ${isAct ? 'Safe to act' : 'Already priced in'}`;
+
+    // Weather risk badge
+    const wr      = r.weather_risk || {};
+    const wrLevel = wr.level || 'safe';
+    const wrCls   = wrLevel === 'danger' ? 'wrisk-danger' : wrLevel === 'watch' ? 'wrisk-watch' : 'wrisk-safe';
+    const wrLabel = wrLevel === 'danger' ? '🚫 DANGER' : wrLevel === 'watch' ? '⚠ WATCH' : '✅ SAFE';
+    const wrTags  = (wr.tags || []).join(' · ');
+    const wrHtml  = `<span class="wrisk ${wrCls}" title="${esc(wrTags)}">${wrLabel}${wrTags ? ` <span class="wrisk-tags">${esc(wrTags)}</span>` : ''}</span>`;
+
+    // Trade on Kalshi — routed through backend which resolves the real Kalshi URL
+    const rawTicker = r.lock.ticker || r.atm_ticker || '';
+    const tradeLink = rawTicker
+      ? `<a class="lock-trade-btn ${isAct ? '' : 'lock-trade-btn-exp'}" href="/api/kalshi-redirect/${rawTicker}" target="_blank" rel="noopener">🔗 Trade on Kalshi</a>`
+      : '';
+
+    return `<div class="lock-card ${cardCls}">
+      <div class="lock-card-hdr">
+        <div>
+          <div class="lock-card-city">${esc(r.city)}</div>
+          <div class="lock-card-sub">HIGH · ${esc(r.station)}${settleDateLabel ? ` · <span style="color:#e6a817">${settleDateLabel}</span>` : ''}</div>
+        </div>
+        <span class="${badgeCls}">${badgeLabel}</span>
+      </div>
+      ${actionHtml}
+      <div class="lock-floor-line">${floorLine}</div>
+      ${leaderRow}
+      <div class="lock-confirm-line">${confirmText}</div>
+      <div class="lock-bottom">
+        ${wrHtml}
+        ${tradeLink}
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+
+  if (actNow.length) {
+    html += `<div class="lock-section-hdr lock-hdr-act"><span class="lock-hdr-icon">🔒</span> LOCK CONFIRMED — ACT NOW</div>`;
+    html += '<div class="lock-grid">';
+    html += actNow.map(r => lockCardHtml(r, 'act')).join('');
+    html += '</div>';
+  }
+
+  if (expensive.length) {
+    html += `<div class="lock-section-hdr lock-hdr-exp"><span class="lock-hdr-icon">🔒</span> LOCK DETECTED — EXPENSIVE</div>`;
+    html += '<div class="lock-grid">';
+    html += expensive.map(r => lockCardHtml(r, 'exp')).join('');
+    html += '</div>';
+  }
+
+  if (approaching.length) {
+    html += `<div class="lock-section-hdr lock-hdr-near"><span class="lock-hdr-icon">→</span> APPROACHING LOCK</div>`;
+    html += '<div class="lock-grid">';
+    html += approaching.map(r => lockCardHtml(r, 'near')).join('');
+    html += '</div>';
+  }
+
+  document.getElementById('locks-body').innerHTML = html;
+}
+
+// ── Render PICKS ──────────────────────────────────────────────────
+function renderPicks(data) {
+  const container = document.getElementById('picks-body');
+
+  // Server buckets picks into place / watch / filtered. Fall back to splitting a
+  // flat `picks` array if an older payload is served.
+  const flat     = Array.isArray(data) ? data : (data.picks || []);
+  const place    = data.place    || flat.filter(p => p.bucket === 'place');
+  const watch    = data.watch    || flat.filter(p => p.bucket === 'watch');
+  const filtered = data.filtered || [];
+
+  // Badge config per category
+  function badgeHtml(p) {
+    const cat  = p.cat;
+    const conf = p.model_conf || '';
+    if (cat === 'lock')      return `<span class="pick-badge badge-lock">LOCK</span>`;
+    if (cat === 'near_lock') return `<span class="pick-badge badge-near">NEAR LOCK</span>`;
+    if (cat === 'model_edge' && conf === 'calibrated')
+                             return `<span class="pick-badge badge-cal">CALIBRATED</span>`;
+    if (cat === 'model_edge')return `<span class="pick-badge badge-gauss">GAUSSIAN</span>`;
+    if (cat === 'gfs_edge')  return `<span class="pick-badge badge-gfs">GFS</span>`;
+    return                          `<span class="pick-badge badge-watch">WATCH</span>`;
+  }
+
+  function cardBorderClass(p) {
+    const cat = p.cat, isYes = p.action === 'BUY YES';
+    if (cat === 'lock')                              return isYes ? 'pick-lock-yes' : 'pick-lock-no';
+    if (cat === 'near_lock')                         return 'pick-near';
+    if (cat === 'model_edge' && p.model_conf === 'calibrated') return 'pick-cal';
+    if (cat === 'model_edge')                        return 'pick-gauss';
+    if (cat === 'gfs_edge')                          return 'pick-gfs-card';
+    return 'pick-watch-card';
+  }
+
+  function buildPickCard(p, rank) {
+    const isYes = p.action === 'BUY YES';
+    const isNo  = p.action === 'BUY NO';
+    const actionClass = isYes ? 'pick-action-yes' : isNo ? 'pick-action-no' : 'pick-action-watch';
+
+    const bidStr   = p.yes_bid  != null ? `${p.yes_bid}¢`  : '—';
+    const askStr   = p.yes_ask  != null ? `${p.yes_ask}¢`  : '—';
+    const noAskVal = p.no_ask   != null ? p.no_ask : (p.yes_bid != null ? 100 - p.yes_bid : null);
+    const noAskStr = noAskVal   != null ? `${noAskVal}¢`   : '—';
+
+    let priceHtml;
+    if (p.yes_bid == null && p.yes_ask == null) {
+      priceHtml = `<span class="no-quote">unquoted</span>`;
+    } else {
+      const spread = `<div class="spread">YES ${bidStr} / ${askStr}</div>`;
+      const entry  = isYes
+        ? `<div class="entry-yes">→ buy YES @ ${askStr}</div>`
+        : `<div class="entry-no">→ buy NO @ ${noAskStr}</div>`;
+      priceHtml = spread + entry;
+    }
+
+    const side      = isYes ? 'YES' : isNo ? 'NO' : 'WATCH';
+    const sideClass = isYes ? 'entry-yes' : isNo ? 'entry-no' : 'dim';
+    const contractLabel = p.contract_label
+      ? `<span class="${sideClass}" style="font-weight:700">${side}</span> on <em>${esc(p.contract_label)}</em>`
+      : esc(p.action);
+
+    const occDate = p.occ_date || '';
+    const dateTag = occDate ? `<span class="dim" style="font-size:10px;margin-left:5px">${occDate}</span>` : '';
+
+    const logBtn = p.ticker && p.cat === 'model_edge'
+      ? `<button class="pick-log-btn" onclick='openLogModal(${JSON.stringify({
+            ticker: p.ticker, city: p.city || '', action: p.action || '',
+            settlement_date: p.occ_date || '', yes_mid: p.market_mid != null ? Math.round(p.market_mid*100) : '',
+            strike_type: p.t_direction || '', threshold: p.threshold || null,
+          })})'>+ Log Trade</button>`
+      : '';
+    const kalshiLink = p.ticker
+      ? `<div class="pick-trade-link" style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+           ${logBtn}
+           <a href="/api/kalshi-redirect/${p.ticker}" target="_blank" rel="noopener">Trade on Kalshi →</a>
+         </div>`
+      : '';
+
+    // ── Meta row: market-P vs model-P, OOS band, credibility verdict ──
+    // Shows the two probabilities side-by-side (not the misleading raw "edge")
+    // plus a server-computed verdict that gates self-contradicting / stale picks.
+    let metaHtml = '';
+    if (p.cat === 'model_edge') {
+      const cred  = p.credibility || { tier: 'warn', reasons: [] };
+      const mkt   = p.market_mid    != null ? Math.round(p.market_mid   * 100) : null;
+      const mdl   = p.prob_estimate != null ? Math.round(p.prob_estimate * 100) : null;
+      const ci    = p.oos_ci;
+      const cType = (p.t_direction || 'between') === 'between' ? 'B' : 'T';
+      const sign  = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+      const oosStr = ci ? `OOS ${cType} ${sign(ci[0])}…${sign(ci[1])}` : `OOS ${cType}: none`;
+      const meanStr = p.model_mean_disp != null ? ` · models ${p.model_mean_disp.toFixed(1)}°F` : '';
+      const ensStr  = p.ens_mean_disp  != null ? ` · ens ${p.ens_mean_disp.toFixed(1)}°F` : '';
+
+      const compare = `<div class="pick-compare">`
+        + `Market <b>${mkt != null ? mkt + '%' : '—'}</b> → Model <b>${mdl != null ? mdl + '%' : '—'}</b>`
+        + ` <span class="dim">· ${oosStr}${meanStr}${ensStr}</span></div>`;
+
+      const vLabel = cred.tier === 'ok' ? '✓ CREDIBLE'
+                   : cred.tier === 'reject' ? '⛔ FILTERED'
+                   : '△ WATCH';
+      const vCls   = cred.tier === 'ok' ? 'verdict-ok'
+                   : cred.tier === 'reject' ? 'verdict-reject'
+                   : 'verdict-warn';
+      const reasons = (cred.reasons || []).length
+        ? `<span class="verdict-reasons">${cred.reasons.map(esc).join(' · ')}</span>` : '';
+      const verdict = `<div class="pick-verdict"><span class="verdict-pill ${vCls}">${vLabel}</span>${reasons}</div>`;
+
+      metaHtml = `<div class="pick-meta-v2">${compare}${verdict}</div>`;
+    }
+
+    // Time-to-place estimate (ET) — only for actionable 'place' cards.
+    let timeHtml = '';
+    const pw = p.place_window;
+    if (pw && pw.window && pw.window !== '—') {
+      const nowCls = pw.window === 'now' ? ' place-now' : '';
+      timeHtml = `<div class="pick-place-time${nowCls}">`
+        + `<span class="place-clock">⏱ ${esc(pw.window)}</span>`
+        + `<span class="place-note">${esc(pw.note || '')}</span></div>`;
+    }
+
+    const filteredCls = (p.credibility && p.credibility.tier === 'reject') ? ' pick-card-filtered' : '';
+    return `<div class="pick-card ${cardBorderClass(p)}${filteredCls}">
+      <div class="pick-rank">#${rank}</div>
+      <div class="pick-city">${esc(p.city)}${dateTag}</div>
+      <div>${badgeHtml(p)}</div>
+      <div class="${actionClass}">${contractLabel}</div>
+      <div class="pick-reason">${esc(p.reason)}</div>
+      <div class="pick-price">${priceHtml}</div>
+      ${timeHtml}
+      ${metaHtml}
+      ${kalshiLink}
+    </div>`;
+  }
+
+  function renderList(items) {
+    let out = '<div class="pick-list">';
+    let prevBase = null;
+    items.forEach((p, idx) => {
+      const cat  = p.cat, conf = p.model_conf || '';
+      const base = cat === 'lock' ? 'lock'
+                 : cat === 'near_lock' ? 'near'
+                 : cat === 'model_edge' && conf === 'calibrated' ? 'cal'
+                 : cat === 'model_edge' ? 'gauss'
+                 : cat === 'gfs_edge' ? 'gfs'
+                 : 'watch';
+      if (prevBase !== null && base !== prevBase) out += '<hr class="pick-divider">';
+      prevBase = base;
+      out += buildPickCard(p, idx + 1);
+    });
+    return out + '</div>';
+  }
+
+  let html = '';
+
+  // ── PLACE — trades to actually place, priority order, with time-to-place ──
+  html += '<div class="picks-section-header">TRADES TO PLACE</div>';
+  html += place.length
+    ? renderList(place)
+    : '<p class="empty-picks">Nothing to place right now — no contract clears the edge bar. Check the watchlist.</p>';
+
+  // ── WATCHLIST — monitor, not yet actionable ──
+  if (watch.length) {
+    html += '<div class="picks-section-header picks-section-low">WATCHLIST</div>';
+    html += renderList(watch);
+  }
+
+  // ── FILTERED — failed credibility / uncalibrated, never actionable ──
+  if (filtered.length) {
+    html += '<div class="picks-section-header picks-section-filtered">'
+          + `⛔ FILTERED — failed credibility / uncalibrated (${filtered.length}, not actionable)</div>`;
+    html += renderList(filtered);
+  }
+
+  container.innerHTML = html;
+}
+
+// ── Render FORECAST ────────────────────────────────────────────────
+function ensCell(stats, color) {
+  if (!stats) return '<span class="dim">—</span>';
+  const mean = stats.mean != null ? stats.mean.toFixed(1) : null;
+  const std  = stats.std  != null ? stats.std.toFixed(1)  : null;
+  const pct  = stats.pct_above != null ? stats.pct_above.toFixed(0) : null;
+  if (mean == null) return '<span class="dim">—</span>';
+  const meanHtml = `<span style="color:${color};font-weight:600">${mean}°</span>`;
+  const stdHtml  = std  != null ? `<span class="dim"> ±${std}°</span>` : '';
+  const pctHtml  = pct  != null ? ` <span class="dim" style="font-size:10px">${pct}%↑</span>` : '';
+  return meanHtml + stdHtml + pctHtml;
+}
+
+function renderForecast(rows) {
+  document.getElementById('fc-body').innerHTML = rows.map(r => {
+    const gfsH  = r.gfs_h != null ? `<span class="hi">${r.gfs_h}°F</span>` : '<span class="dim">—</span>';
+    const gfsL  = r.gfs_l != null ? `<span class="lo">${r.gfs_l}°F</span>` : '<span class="dim">—</span>';
+    const temp  = r.temp_f != null ? `<span class="br">${r.temp_f}°F</span>` : '<span class="dim">—</span>';
+    const dayH  = r.day_h != null ? `<span class="hi">${r.day_h}°F</span>` : '<span class="dim">—</span>';
+    const atmTk = r.atm_label
+      ? `<span class="dim" style="font-size:10px">${esc(r.atm_label)}</span>`
+      : '<span class="dim">—</span>';
+    const ens   = r.ensemble || {};
+    const gefs  = ensCell(ens['gfs025'],        '#4499ff');
+    const ecmwf = ensCell(ens['ecmwf_ifs025'],  '#44cc88');
+    const icon  = ensCell(ens['icon_seamless'],  '#ffaa44');
+
+    // Calibrated forecast cell: show raw → corrected, with bias annotation
+    let calibCell;
+    if (r.calib_h != null) {
+      const delta = (r.calib_h - r.gfs_h).toFixed(1);
+      const sign  = delta >= 0 ? '+' : '';
+      const col   = r.bias_f > 0 ? 'var(--low-fg)' : 'var(--high-fg)';
+      calibCell = `<span class="hi">${r.calib_h}°F</span>`
+                + ` <span class="dim" style="font-size:10px;color:${col}">(${sign}${delta})</span>`;
+    } else {
+      calibCell = '<span class="dim">no calib</span>';
+    }
+
+    // Market price vs model probability for ATM contract
+    let mktModel;
+    if (r.atm_bid != null && r.atm_ask != null) {
+      const mktMid = ((r.atm_bid + r.atm_ask) / 2).toFixed(0);
+      const mkt = `<span class="price">${r.atm_bid}¢/${r.atm_ask}¢</span>`;
+      if (r.atm_model_prob != null) {
+        const prob = r.atm_model_prob.toFixed(0);
+        const diff = (r.atm_model_prob - mktMid).toFixed(0);
+        const sign = diff >= 0 ? '+' : '';
+        const col  = Math.abs(diff) >= 5 ? (diff > 0 ? 'var(--yes)' : 'var(--no)') : 'var(--text-dim)';
+        mktModel = `${mkt} <span style="font-size:10px;color:${col}" title="model − market">${sign}${diff}%</span>`;
+      } else {
+        mktModel = mkt;
+      }
+    } else {
+      mktModel = '<span class="dim">—</span>';
+    }
+
+    return `<tr>
+      <td class="br">${esc(r.city)}</td>
+      <td class="dim">${esc(r.station)}</td>
+      <td>${gfsH}</td>
+      <td>${calibCell}</td>
+      <td>${gfsL}</td>
+      <td>${temp}</td>
+      <td>${dayH}</td>
+      <td>${gefs}</td>
+      <td>${ecmwf}</td>
+      <td>${icon}</td>
+      <td>${atmTk}</td>
+      <td>${mktModel}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Fetch & render ─────────────────────────────────────────────────
+let busy = false;
+function load() {
+  if (busy) return;
+  busy = true;
+  document.getElementById('s-spin').innerHTML = '<span class="spinner"></span>refreshing';
+  fetch('/api/data')
+    .then(r => r.json())
+    .then(data => {
+      renderLive(data.rows);
+      renderLocks(data.rows);
+      renderForecast(data.rows);
+      renderPicks(data);
+      document.getElementById('s-metar').textContent   = data.last_metar;
+      document.getElementById('s-prices').textContent  = data.last_prices;
+      const gfsEl = document.getElementById('s-gfs');
+      gfsEl.textContent = data.last_forecast;
+      // Warn if forecast is stale (>60 min old based on HH:MM UTC string)
+      const gfsStale = (() => {
+        const m = (data.last_forecast || '').match(/^(\d{2}):(\d{2}) UTC$/);
+        if (!m) return false;
+        const n = new Date();
+        const nowMin = n.getUTCHours() * 60 + n.getUTCMinutes();
+        const fcMin  = parseInt(m[1]) * 60 + parseInt(m[2]);
+        const diff   = ((nowMin - fcMin) + 1440) % 1440;
+        return diff > 60;
+      })();
+      gfsEl.style.color = gfsStale ? 'var(--no)' : '';
+      if (gfsStale) gfsEl.title = 'Forecast >60 min old — picks may be stale';
+      document.getElementById('stale-banner').style.display = gfsStale ? 'block' : 'none';
+      document.getElementById('s-ens').textContent     = data.last_ensemble || '—';
+      document.getElementById('s-spin').textContent    = '';
+    })
+    .catch(() => {
+      document.getElementById('s-spin').innerHTML = '<span style="color:var(--no)">fetch error</span>';
+    })
+    .finally(() => { busy = false; });
+}
+
+function forceRefreshForecast() {
+  const btn = document.getElementById('gfs-refresh-btn');
+  if (btn) { btn.textContent = '↻ fetching…'; btn.disabled = true; }
+  fetch('/api/refresh')
+    .then(r => r.json())
+    .then(data => {
+      if (btn) { btn.textContent = '↻ GFS'; btn.disabled = false; }
+      if (data.status === 'ok') { load(); }
+      else { alert('Refresh error: ' + data.error); }
+    })
+    .catch(e => {
+      if (btn) { btn.textContent = '↻ GFS'; btn.disabled = false; }
+      alert('Refresh failed: ' + e);
+    });
+}
+
+// ── Track Record ───────────────────────────────────────────────────
+let recordBusy = false;
+function loadRecord() {
+  if (recordBusy) return;
+  recordBusy = true;
+  fetch('/api/trades')
+    .then(r => r.json())
+    .then(data => { renderRecord(data); })
+    .catch(e => {
+      document.getElementById('record-body').innerHTML =
+        `<p style="color:var(--no);padding:20px">Failed to load trade record: ${esc(String(e))}</p>`;
+    })
+    .finally(() => { recordBusy = false; });
+}
+
+function wrClass(rate) {
+  if (rate >= 80) return 'rec-wr-hi';
+  if (rate >= 60) return 'rec-wr-mid';
+  return 'rec-wr-lo';
+}
+
+function renderRecord(d) {
+  const today = new Date().toISOString().slice(0,10);
+  const start = d.date_range_start || today;
+  const fmtDate = s => s ? s.replace(/-/g, '/') : '—';
+
+  // Stats cards
+  const winRateColor = d.win_rate >= 80 ? 'rec-gold'
+                     : d.win_rate >= 60 ? 'rec-gold'
+                     : 'rec-red';
+  const pnl = d.total_pnl;
+  const pnlStr  = pnl != null ? (pnl >= 0 ? '+$' + pnl.toFixed(2) : '-$' + Math.abs(pnl).toFixed(2)) : '—';
+  const pnlCls  = pnl == null ? '' : pnl >= 0 ? 'rec-green' : 'rec-red';
+
+  let html = `
+    <div class="rec-hdr-row">
+      <div>
+        <h2 class="rec-title" style="margin-bottom:2px">Track Record</h2>
+        <p class="rec-sub" style="margin-bottom:0">${fmtDate(start)} — ${fmtDate(today)}</p>
+      </div>
+      <button class="rec-add-btn" onclick="openLogModal({})">+ Log Trade</button>
+    </div>
+    <div class="rec-section-hdr">Verified Record</div>
+    <p class="rec-verified-note">Graded automatically against live Kalshi market settlement prices.</p>
+    <div class="rec-stats">
+      <div class="rec-stat-card">
+        <div class="rec-stat-label">Win Rate</div>
+        <div class="rec-stat-value ${winRateColor}">${d.total_settled > 0 ? d.win_rate + '%' : '—'}</div>
+        <div class="rec-stat-detail">${d.wins}W – ${d.losses}L settled</div>
+      </div>
+      <div class="rec-stat-card">
+        <div class="rec-stat-label">Total Settled</div>
+        <div class="rec-stat-value" style="color:var(--text-bright)">${d.total_settled > 0 ? d.wins + '–' + d.losses : '—'}</div>
+        <div class="rec-stat-detail">${d.total_settled} trades graded</div>
+      </div>
+      <div class="rec-stat-card">
+        <div class="rec-stat-label">Pending</div>
+        <div class="rec-stat-value rec-gold">${d.pending}</div>
+        <div class="rec-stat-detail">awaiting settlement</div>
+      </div>
+      <div class="rec-stat-card">
+        <div class="rec-stat-label">Net P&amp;L</div>
+        <div class="rec-stat-value ${pnlCls}">${pnlStr}</div>
+        <div class="rec-stat-detail">profit / loss on settled</div>
+      </div>
+    </div>`;
+
+  // Pending trades
+  if (d.pending_list && d.pending_list.length) {
+    html += `<div class="rec-section-hdr">Pending Trades</div>
+    <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:4px" class="rec-pending-list">`;
+    d.pending_list.forEach(t => {
+      const actCls = t.action === 'BUY_NO' ? 'rec-pending-action-no' : 'rec-pending-action-yes';
+      const risked = t.dollars_risked != null ? `$${t.dollars_risked.toFixed(2)} in` : '';
+      const payout = t.dollars_payout != null ? `→ $${t.dollars_payout.toFixed(2)} if win` : '';
+      const moneyStr = [risked, payout].filter(Boolean).join(' ');
+      html += `<div class="rec-pending-row">
+        <span class="rec-open-pill">OPEN</span>
+        <span class="${actCls}">${t.action.replace('_',' ')}</span>
+        <span style="color:var(--text-bright);font-weight:600">${esc(t.city_name)}</span>
+        <span class="rec-pending-ticker">${esc(t.ticker)}</span>
+        <span class="rec-pending-date">settles ${fmtDate(t.settlement_date)}</span>
+        <span style="color:var(--text-dim);font-size:11px">${esc(moneyStr)}</span>
+        <button class="rec-pending-remove" title="Remove" onclick="removeTrade('${esc(t.id)}')">✕</button>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Results by day (includes pending, click to expand)
+  const tbd = d.trades_by_day || {};
+  if (d.by_day && d.by_day.length) {
+    html += `<div class="rec-section-hdr">Results by Day</div>
+    <table class="rec-table" id="rec-day-table">
+      <thead><tr><th>DATE</th><th>W</th><th>L</th><th>OPEN</th><th>WIN RATE</th><th></th></tr></thead>
+      <tbody>`;
+    d.by_day.forEach(row => {
+      const wCls   = row.wins    > 0 ? 'rec-w'    : 'rec-dim';
+      const lCls   = row.losses  > 0 ? 'rec-l'    : 'rec-l0';
+      const pCls   = row.pending > 0 ? 'rec-gold' : 'rec-dim';
+      const wrStr  = row.win_rate != null ? row.win_rate + '%' : '—';
+      const wrCls  = row.win_rate != null ? 'rec-wr ' + wrClass(row.win_rate) : 'rec-dim';
+      const dayKey = row.date.replace(/-/g,'');
+      html += `<tr class="rec-day-row" onclick="toggleDayDetail('${dayKey}')" style="cursor:pointer">
+        <td>${fmtDate(row.date)}</td>
+        <td class="${wCls}">${row.wins}</td>
+        <td class="${lCls}">${row.losses}</td>
+        <td class="${pCls}">${row.pending > 0 ? row.pending : '—'}</td>
+        <td class="${wrCls}">${wrStr}</td>
+        <td style="color:var(--text-dim);font-size:11px" id="rec-day-chevron-${dayKey}">▶</td>
+      </tr>
+      <tr id="rec-day-detail-${dayKey}" style="display:none">
+        <td colspan="6" style="padding:0">
+          <div class="rec-day-detail-box">`;
+      const dayTrades = tbd[row.date] || [];
+      if (dayTrades.length) {
+        dayTrades.forEach(t => {
+          const outcome  = t.outcome;
+          const oCls     = outcome === 'won' ? 'rec-w' : outcome === 'lost' ? 'rec-l' : 'rec-gold';
+          const oLabel   = outcome === 'won' ? '✓ WON' : outcome === 'lost' ? '✗ LOST' : '⏳ OPEN';
+          const actCls = t.action === 'BUY_NO' ? 'rec-pending-action-no' : 'rec-pending-action-yes';
+          const risked = t.dollars_risked != null ? `$${t.dollars_risked.toFixed(2)} in` : '';
+          const payout = t.dollars_payout != null ? `→ $${t.dollars_payout.toFixed(2)} if win` : '';
+          const pnlNum = outcome === 'won' && t.dollars_risked != null && t.dollars_payout != null
+            ? `+$${(t.dollars_payout - t.dollars_risked).toFixed(2)}`
+            : outcome === 'lost' && t.dollars_risked != null
+            ? `-$${t.dollars_risked.toFixed(2)}`
+            : '';
+          const pnlCls2 = pnlNum.startsWith('+') ? 'rec-w' : pnlNum.startsWith('-') ? 'rec-l' : '';
+          const temp   = t.settlement_temp != null ? ` · settled ${t.settlement_temp}°F` : '';
+          html += `<div class="rec-detail-row">
+            <span class="${oCls}" style="font-weight:700;min-width:58px">${oLabel}</span>
+            <span class="${actCls}">${(t.action||'').replace('_',' ')}</span>
+            <span style="color:var(--text-bright);font-weight:600">${esc(t.city_name)}</span>
+            <span class="rec-pending-ticker">${esc(t.ticker)}</span>
+            <span style="color:var(--text-dim);font-size:11px">${[risked, payout].filter(Boolean).join(' ')}${esc(temp)}</span>
+            ${pnlNum ? `<span class="${pnlCls2}" style="font-weight:700;margin-left:auto;margin-right:8px">${pnlNum}</span>` : ''}
+            <button class="rec-pending-remove" onclick="event.stopPropagation();removeTrade('${esc(t.id)}')">✕</button>
+          </div>`;
+        });
+      } else {
+        html += `<span style="color:var(--text-dim);font-size:12px">No trades logged for this day.</span>`;
+      }
+      html += `</div></td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  // Results by city (includes pending)
+  if (d.by_city && d.by_city.length) {
+    html += `<div class="rec-section-hdr">Results by City</div>
+    <table class="rec-table">
+      <thead><tr><th>CITY</th><th>W</th><th>L</th><th>OPEN</th><th>WIN RATE</th></tr></thead>
+      <tbody>`;
+    d.by_city.forEach(row => {
+      const wCls  = row.wins    > 0 ? 'rec-w'   : 'rec-dim';
+      const lCls  = row.losses  > 0 ? 'rec-l'   : 'rec-l0';
+      const pCls  = row.pending > 0 ? 'rec-gold' : 'rec-dim';
+      const wrStr = row.win_rate != null ? row.win_rate + '%' : '—';
+      const wrCls = row.win_rate != null ? 'rec-wr ' + wrClass(row.win_rate) : 'rec-dim';
+      html += `<tr>
+        <td>${esc(row.name)}</td>
+        <td class="${wCls}">${row.wins}</td>
+        <td class="${lCls}">${row.losses}</td>
+        <td class="${pCls}">${row.pending > 0 ? row.pending : '—'}</td>
+        <td class="${wrCls}">${wrStr}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  if (!d.by_day?.length && !d.pending_list?.length) {
+    html += `<p style="color:var(--text-dim);padding:20px 0">No trades logged yet. Use "+ Log Trade" on any pick card, or click the button above.</p>`;
+  }
+
+  document.getElementById('record-body').innerHTML = html;
+}
+
+// ── Day detail expand/collapse ────────────────────────────────────
+function toggleDayDetail(dayKey) {
+  const row = document.getElementById('rec-day-detail-' + dayKey);
+  const chev = document.getElementById('rec-day-chevron-' + dayKey);
+  if (!row) return;
+  const open = row.style.display !== 'none';
+  row.style.display = open ? 'none' : 'table-row';
+  if (chev) chev.textContent = open ? '▶' : '▼';
+}
+
+// ── Log-trade modal ───────────────────────────────────────────────
+let _ltPrefill = {};
+
+function openLogModal(prefill) {
+  _ltPrefill = prefill || {};
+  const p = _ltPrefill;
+  document.getElementById('lt-ticker').value  = p.ticker  || '';
+  document.getElementById('lt-city').value    = p.city    || '';
+  document.getElementById('lt-action').value  = (p.action || 'BUY_NO').replace(' ','_');
+  document.getElementById('lt-date').value    = p.settlement_date || '';
+  document.getElementById('lt-risked').value  = '';
+  document.getElementById('lt-payout').value  = '';
+  document.getElementById('lt-notes').value   = '';
+  document.getElementById('lt-strike-type').value   = p.strike_type || '';
+  document.getElementById('lt-threshold').value     = p.threshold   != null ? p.threshold : '';
+  document.getElementById('lt-msg').textContent = '';
+  document.getElementById('lt-modal').style.display = 'flex';
+  document.getElementById('lt-contracts').focus();
+}
+
+function closeLogModal() {
+  document.getElementById('lt-modal').style.display = 'none';
+}
+
+async function submitLogTrade() {
+  const ticker       = document.getElementById('lt-ticker').value.trim().toUpperCase();
+  const city         = document.getElementById('lt-city').value.trim().toUpperCase();
+  const action       = document.getElementById('lt-action').value;
+  const sdate        = document.getElementById('lt-date').value;
+  const risked       = parseFloat(document.getElementById('lt-risked').value) || null;
+  const payout       = parseFloat(document.getElementById('lt-payout').value) || null;
+  const notes        = document.getElementById('lt-notes').value.trim();
+  const strike_type  = document.getElementById('lt-strike-type').value;
+  const threshold    = parseFloat(document.getElementById('lt-threshold').value) || null;
+  const msgEl        = document.getElementById('lt-msg');
+
+  if (!ticker || !sdate) {
+    msgEl.textContent = 'Ticker and settlement date are required.';
+    msgEl.style.color = 'var(--no)';
+    return;
+  }
+
+  // Compute floor/cap from threshold and strike_type
+  let floor_strike = null, cap_strike = null;
+  if (threshold != null) {
+    if (strike_type === 'between') {
+      cap_strike   = threshold;
+      floor_strike = Math.round((threshold - 2) * 10) / 10;
+    } else if (strike_type === 'less') {
+      cap_strike = threshold;
+    } else if (strike_type === 'greater') {
+      floor_strike = threshold;
+    }
+  }
+
+  const payload = {
+    ticker, city, action,
+    settlement_date: sdate,
+    entry_date: new Date().toISOString().slice(0,10),
+    dollars_risked: risked,
+    dollars_payout: payout,
+    notes,
+    strike_type: strike_type || null,
+    floor_strike, cap_strike,
+  };
+
+  try {
+    const r = await fetch('/api/trades/add', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      closeLogModal();
+      loadRecord();
+    } else {
+      msgEl.textContent = data.error || 'Error saving trade.';
+      msgEl.style.color = 'var(--no)';
+    }
+  } catch(e) {
+    msgEl.textContent = String(e);
+    msgEl.style.color = 'var(--no)';
+  }
+}
+
+async function removeTrade(id) {
+  await fetch('/api/trades/remove', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id}),
+  });
+  loadRecord();
+}
+
+// Auto-refresh every 2 min
+load();
+setInterval(load, 120000);
+
+// UTC clock (ticks every second, no server round-trip)
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    String(n.getUTCHours()).padStart(2,'0') + ':' +
+    String(n.getUTCMinutes()).padStart(2,'0') + ' UTC';
+}, 1000);
+</script>
+
+<!-- Log Trade Modal -->
+<div id="lt-modal" class="lt-modal-overlay" style="display:none" onclick="if(event.target===this)closeLogModal()">
+  <div class="lt-modal">
+    <h3>Log Trade</h3>
+    <!-- hidden fields populated by prefill -->
+    <input type="hidden" id="lt-strike-type">
+    <input type="hidden" id="lt-threshold">
+    <div class="lt-row">
+      <div class="lt-field" style="flex:2">
+        <label>Ticker</label>
+        <input id="lt-ticker" type="text" placeholder="KXHIGHMIA-26JUN14-B91.5">
+      </div>
+      <div class="lt-field" style="flex:1">
+        <label>City</label>
+        <input id="lt-city" type="text" placeholder="MIA">
+      </div>
+    </div>
+    <div class="lt-row">
+      <div class="lt-field">
+        <label>Action</label>
+        <select id="lt-action">
+          <option value="BUY_NO">BUY NO</option>
+          <option value="BUY_YES">BUY YES</option>
+        </select>
+      </div>
+      <div class="lt-field">
+        <label>Settlement Date</label>
+        <input id="lt-date" type="date">
+      </div>
+    </div>
+    <div class="lt-row">
+      <div class="lt-field">
+        <label>$ Amount In (risked)</label>
+        <input id="lt-risked" type="number" min="0.01" step="0.01" placeholder="3.00">
+      </div>
+      <div class="lt-field">
+        <label>$ Payout if Win</label>
+        <input id="lt-payout" type="number" min="0.01" step="0.01" placeholder="5.00">
+      </div>
+    </div>
+    <div class="lt-row">
+      <div class="lt-field">
+        <label>Notes</label>
+        <input id="lt-notes" type="text" placeholder="optional">
+      </div>
+    </div>
+    <div id="lt-msg" style="font-size:12px;min-height:18px;margin-top:4px"></div>
+    <div class="lt-btns">
+      <button class="lt-cancel" onclick="closeLogModal()">Cancel</button>
+      <button class="lt-submit" onclick="submitLogTrade()">Save Trade</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

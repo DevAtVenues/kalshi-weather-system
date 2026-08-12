@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.archive-forecasts</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/.venv/bin/python</string>
+        <string>scripts/archive_forecasts.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project</string>
+    <!-- Same windows as the cron (06/12/18/23 local). Catch-up on wake; the guard
+         dedupes a cron double-fire. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/archive_forecasts.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/archive_forecasts.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

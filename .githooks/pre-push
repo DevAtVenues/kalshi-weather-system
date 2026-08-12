@@ -1,0 +1,16 @@
+#!/bin/sh
+# Push gate: unit suite + end-to-end smoke + model-behavior replay. Replay drift
+# after an INTENTIONAL model change: re-run with REPLAY_ACK=1 git push (the diff
+# still prints — acknowledged, not rubber-stamped). Never --no-verify.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+echo "[pre-push] pytest…"
+.venv/bin/python -m pytest -q --tb=line || { echo "[pre-push] BLOCKED: unit tests failing"; exit 1; }
+echo "[pre-push] smoke test…"
+.venv/bin/python scripts/smoke_test.py || { echo "[pre-push] BLOCKED: smoke test failing"; exit 1; }
+echo "[pre-push] replay check (model behavior vs production)…"
+if [ "$REPLAY_ACK" = "1" ]; then
+  .venv/bin/python scripts/replay_check.py --days 3 --ack
+else
+  .venv/bin/python scripts/replay_check.py --days 3 || { echo "[pre-push] BLOCKED: model drift unacknowledged (REPLAY_ACK=1 to accept)"; exit 1; }
+fi

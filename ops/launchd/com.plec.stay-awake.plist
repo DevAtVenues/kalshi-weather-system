@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.stay-awake</string>
+    <!-- caffeinate -s prevents SYSTEM sleep while on AC power only — on battery
+         macOS sleeps normally, so an unplugged laptop is never drained. This
+         replaces the hand-run `caffeinate -s` in a terminal (which dies with the
+         window — the 7/12 overnight gap was exactly that). Unload to disable:
+         launchctl unload ~/Library/LaunchAgents/com.plec.stay-awake.plist -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-s</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

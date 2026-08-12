@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.position-watch</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/.venv/bin/python</string>
+        <string>scripts/position_watch.py</string>
+        <string>--scheduled</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project</string>
+    <!-- Every 30 min: pushes when a watched contract's mid moves >=7¢ or a fresh
+         model snapshot erodes the thesis. Quiet no-op when the watchlist is empty
+         or settled. Add positions to data/analysis/watchlist.json. -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/position_watch.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/position_watch.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

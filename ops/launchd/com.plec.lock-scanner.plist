@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.lock-scanner</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/.venv/bin/python</string>
+        <string>scripts/lock_scan.py</string>
+        <string>--scheduled</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project</string>
+    <!-- Every 10 min; the script itself no-ops outside 1-9 PM ET (peak windows).
+         Pushes are deduped per (day, ticker, side) in logs/health/, so a hit pings
+         the phone ONCE. Two days of manual scans proved one-shot human-speed scans
+         always lose to the bots — this is the standing version. -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/lock_scanner.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/lock_scanner.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

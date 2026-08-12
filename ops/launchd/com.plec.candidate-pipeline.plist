@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.candidate-pipeline</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/.venv/bin/python</string>
+        <string>scripts/candidate_pipeline.py</string>
+        <string>--scheduled</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project</string>
+    <!-- 20 min after each run_live window (01/07/13/19 local): Stage 1 re-reads the
+         signals that cycle just wrote. --scheduled applies the once-per-window slot
+         guard, so a launchd catch-up run and a manual run can't double-write. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>1</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>20</integer></dict>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/candidate_pipeline.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/candidate_pipeline.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.fast-obs-watch</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/.venv/bin/python</string>
+        <string>scripts/fast_obs_watch.py</string>
+        <string>--scheduled</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project</string>
+    <!-- Every 5 min; the script no-ops unless a watchlist entry settles today
+         AND its station is in local afternoon (10:00-20:00). Pushes only on
+         stage ESCALATION (warn -> threat -> win/dead), once per stage per day.
+         Built after 2026-07-21: the market repriced a held SAT bracket on
+         hourly METAR tenths a full hour before our hourly-cadence stack saw
+         them. No health-check row on purpose: a missed poll loses awareness,
+         not data (lock-scanner doctrine). -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/fast_obs_watch.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/fast_obs_watch.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

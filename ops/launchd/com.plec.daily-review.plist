@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.plec.daily-review</string>
+
+    <!-- Absolute venv python + the review script. daily_review spawns children
+         via sys.executable, so launchd's minimal PATH is fine. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/.venv/bin/python</string>
+        <string>scripts/daily_review.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project</string>
+
+    <!-- 10:00 LOCAL time. Unlike cron, launchd runs this once on the next WAKE if
+         the laptop was asleep at 10:00 — the whole point of using launchd here. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- launchd opens these in append mode, preserving the cron.out convention. -->
+    <key>StandardOutPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/daily_review/cron.out</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/josiah/PLEC-projects/Prediction-Markets-Project/logs/daily_review/cron.out</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
