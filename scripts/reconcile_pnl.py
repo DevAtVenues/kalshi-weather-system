@@ -58,19 +58,55 @@ sys.path.insert(0, str(ROOT / "src"))
 SIGNALS = ROOT / "data" / "signals" / "signals_log.jsonl"
 OUT_DIR = ROOT / "data" / "analysis"
 
-# Kalshi fee schedule: fees = ceil(0.07 x C x P x (1-P)) in cents, taker side only.
-# Same 0.07 coefficient backtest.py:32 uses. VERIFY against a real statement before
-# trusting the absolute level — the decomposition's shape does not depend on it,
-# but the fee column does.
+# Kalshi fee model: fees = ceil(0.07 x C x P x (1-P)) in cents for takers, and
+# 25% of that for makers — the same coefficients backtest.py:32-38 uses.
+#
+# This is a FALLBACK. A reconciliation tool exists to measure what happened, so a
+# modelled fee is exactly the wrong kind of number to prefer: it is the same class
+# of error the audit was about. Always take the exchange-reported fee when the API
+# supplies one; the model only fills gaps, and every row records which was used.
 FEE_COEF = 0.07
+MAKER_FEE_RATIO = 0.25
+
+# Fee field names seen on Kalshi fill payloads, most specific first.
+_FEE_KEYS = ("fee_cents", "fees_cents", "fee", "fees", "taker_fee_cents", "maker_fee_cents")
 
 
-def fee_cents(price_cents: int, count: int, is_taker: bool) -> float:
-    """Kalshi trading fee for one fill, in cents. Makers are not charged."""
-    if not is_taker:
-        return 0.0
+def model_fee_cents(price_cents: int, count: int, is_taker: bool) -> float:
+    """Modelled Kalshi trading fee for one fill, in cents."""
     p = price_cents / 100.0
-    return math.ceil(FEE_COEF * count * p * (1.0 - p) * 100.0)
+    taker = math.ceil(FEE_COEF * count * p * (1.0 - p) * 100.0)
+    return float(taker if is_taker else math.ceil(taker * MAKER_FEE_RATIO))
+
+
+def reported_fee_cents(fill: dict) -> float | None:
+    """The exchange's own fee for this fill, in cents, if it sent one.
+
+    Kalshi reports money in cents on the fills endpoint. A float that looks like
+    dollars (a small non-integer) is scaled, so a 0.42 does not silently become
+    0.42c when it means 42c."""
+    for k in _FEE_KEYS:
+        v = fill.get(k)
+        if v is None or v == "":
+            continue
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if f < 0:
+            continue
+        if k in ("fee", "fees") and f != int(f) and f < 10:
+            f *= 100.0                      # dollars -> cents
+        return f
+    return None
+
+
+def fee_for(fill: dict, price_cents: int, count: int, is_taker: bool) -> tuple[float, str]:
+    """(fee in cents, 'api' | 'model'). Prefer what the exchange charged."""
+    rep = reported_fee_cents(fill)
+    if rep is not None:
+        return rep, "api"
+    return model_fee_cents(price_cents, count, is_taker), "model"
 
 
 # ─────────────────────────────────────────────────────────────── read-only client
@@ -199,9 +235,33 @@ def decision_for(rows: list[dict], when: datetime | None) -> dict | None:
 
 # ───────────────────────────────────────────────────────────────── the ledger
 
+def _settlement_index(settlements: list[dict]) -> dict[str, dict]:
+    """ticker -> {result, revenue_c, at}. `market_result` decides which SIDE won;
+    the ticker-wide `revenue` cannot be split between a YES and a NO position."""
+    out: dict[str, dict] = {}
+    for s in settlements:
+        tk = s.get("ticker")
+        if not tk:
+            continue
+        cur = out.setdefault(tk, {"result": "", "revenue_c": 0.0, "at": None})
+        cur["result"] = (s.get("market_result") or cur["result"] or "").lower()
+        cur["revenue_c"] += float(s.get("revenue") or 0.0)
+        cur["at"] = _ts(s.get("settled_time") or s.get("settled_ts")) or cur["at"]
+    return out
+
+
 def build_positions(fills: list[dict], settlements: list[dict],
                     signals: dict[str, list[dict]]) -> list[dict]:
-    """One row per (ticker, side): what we paid, what we got, what we'd claimed."""
+    """One row per (ticker, side), attributed FILL BY FILL.
+
+    Each fill is joined to the signal that stood at ITS OWN timestamp before any
+    aggregation. A position accumulated across cycles prices its later fills
+    against the later mid, which is the whole point of a temporal join — using
+    the first fill's signal for the whole position reintroduces the error this
+    tool exists to measure.
+    """
+    settle = _settlement_index(settlements)
+
     agg: dict[tuple, dict] = {}
     for f in fills:
         ticker = f.get("ticker")
@@ -214,71 +274,98 @@ def build_positions(fills: list[dict], settlements: list[dict],
         price = int(f.get("yes_price") if side == "yes" else f.get("no_price") or 0)
         taker = bool(f.get("is_taker", True))
         signed = -1 if (f.get("action") or "buy").lower() == "sell" else 1
-        k = (ticker, side)
-        a = agg.setdefault(k, {"ticker": ticker, "side": side, "count": 0,
-                               "cost_c": 0.0, "fee_c": 0.0, "first_fill": None})
+        when = _ts(f.get("created_time") or f.get("created_ts"))
+        fee, fee_src = fee_for(f, price, count, taker)
+
+        a = agg.setdefault((ticker, side), {
+            "ticker": ticker, "side": side, "count": 0, "cost_c": 0.0, "fee_c": 0.0,
+            "n_fills": 0, "n_matched": 0, "first_fill": None, "fee_srcs": set(),
+            "scored_notional_c": 0.0, "matched_count": 0, "exp_notional_c": 0.0,
+            "n_no_prob": 0, "sig": None})
         a["count"] += signed * count
         a["cost_c"] += signed * price * count
-        a["fee_c"] += fee_cents(price, count, taker)
-        t = _ts(f.get("created_time") or f.get("created_ts"))
-        if t and (a["first_fill"] is None or t < a["first_fill"]):
-            a["first_fill"] = t
+        a["fee_c"] += fee
+        a["n_fills"] += 1
+        a["fee_srcs"].add(fee_src)
+        if when and (a["first_fill"] is None or when < a["first_fill"]):
+            a["first_fill"] = when
 
-    revenue: dict[str, float] = defaultdict(float)
-    settled_at: dict[str, datetime | None] = {}
-    for s in settlements:
-        tk = s.get("ticker")
-        if not tk:
+        sig = decision_for(signals.get(ticker, []), when)
+        if sig is None or sig.get("market_mid") is None:
             continue
-        revenue[tk] += float(s.get("revenue") or 0.0)         # cents
-        settled_at[tk] = _ts(s.get("settled_time") or s.get("settled_ts"))
+        a["n_matched"] += 1
+        a["sig"] = a["sig"] or sig
+        mid = float(sig["market_mid"])
+        # The price the system scored itself at, on the side this fill took.
+        scored_c = (mid if side == "yes" else 1.0 - mid) * 100.0
+        a["scored_notional_c"] += signed * scored_c * count
+        a["matched_count"] += signed * count
+        if sig.get("prob_estimate") is None:
+            a["n_no_prob"] += 1
+        else:
+            p_yes = float(sig["prob_estimate"])
+            p_side = p_yes if side == "yes" else 1.0 - p_yes
+            a["exp_notional_c"] += signed * p_side * 100.0 * count
 
     rows: list[dict] = []
     for (ticker, side), a in sorted(agg.items()):
         if a["count"] == 0:
             continue
-        avg_price_c = a["cost_c"] / a["count"]
-        rev_c = revenue.get(ticker, 0.0)
-        realized_c = rev_c - a["cost_c"] - a["fee_c"]
+        st = settle.get(ticker)
+        settled = st is not None
+        result = (st or {}).get("result") or ""
+        # A position with no settlement row is still OPEN. Treating its payout as
+        # zero books the whole cost as a loss and corrupts the current week.
+        won = (result == side) if (settled and result) else None
+        if settled and won is None:
+            # Settled but the API sent no market_result: the ticker-wide revenue is
+            # only unambiguous when one side traded it.
+            sides_here = sum(1 for (t, _s) in agg if t == ticker)
+            if sides_here == 1:
+                won = st["revenue_c"] > 0
+        payout_c = (100.0 * a["count"] if won else 0.0) if won is not None else None
+        realized_c = (None if payout_c is None
+                      else payout_c - a["cost_c"] - a["fee_c"])
 
-        sig = decision_for(signals.get(ticker, []), a["first_fill"])
-        claimed_c = expected_c = scored_price_c = None
-        if sig is not None and sig.get("market_mid") is not None:
-            mid = float(sig["market_mid"])
-            # The price the system scored itself at, on the side we actually took.
-            scored_price_c = (mid if side == "yes" else 1.0 - mid) * 100.0
-            # claimed = the repo's own grader (grade_candidates.py:110): the REAL
-            # outcome, priced at the mid it scored. This is the number the docs quote.
-            won = rev_c > 0
-            claimed_c = ((100.0 - scored_price_c) if won else -scored_price_c) * a["count"]
-            # expected = the model's OWN expected value at decision time. Without
-            # this, claimed − realized collapses to execution cost by construction
-            # and the model is never held to account for its probability.
-            if sig.get("prob_estimate") is not None:
-                p_yes = float(sig["prob_estimate"])
-                p_side = p_yes if side == "yes" else 1.0 - p_yes
-                expected_c = (p_side * 100.0 - scored_price_c) * a["count"]
+        # Attributed only when every fill found its decision AND the outcome is
+        # known — otherwise the weekly identity would not hold for this row.
+        fully_matched = a["n_matched"] == a["n_fills"] and a["n_fills"] > 0
+        has_prob = a["n_no_prob"] == 0 and fully_matched
+        claimed_c = expected_c = None
+        if fully_matched and won is not None:
+            claimed_c = ((100.0 * a["count"] - a["scored_notional_c"]) if won
+                         else -a["scored_notional_c"])
+            if has_prob:
+                expected_c = a["exp_notional_c"] - a["scored_notional_c"]
 
+        avg_scored = (a["scored_notional_c"] / a["matched_count"]
+                      if a["matched_count"] else None)
         rows.append({
             "ticker": ticker, "side": side, "count": a["count"],
-            "avg_fill_price_c": round(avg_price_c, 2),
-            "scored_price_c": None if scored_price_c is None else round(scored_price_c, 2),
-            "cost_c": round(a["cost_c"], 2), "fee_c": round(a["fee_c"], 2),
-            "revenue_c": round(rev_c, 2),
-            "realized_c": round(realized_c, 2),
+            "settled": settled and won is not None,
+            "market_result": result or None,
+            "won": won,
+            "avg_fill_price_c": round(a["cost_c"] / a["count"], 2),
+            "scored_price_c": None if avg_scored is None else round(avg_scored, 2),
+            "cost_c": round(a["cost_c"], 2),
+            "fee_c": round(a["fee_c"], 2),
+            "fee_source": "+".join(sorted(a["fee_srcs"])) or None,
+            "payout_c": None if payout_c is None else round(payout_c, 2),
+            "realized_c": None if realized_c is None else round(realized_c, 2),
             "claimed_c": None if claimed_c is None else round(claimed_c, 2),
             "expected_c": None if expected_c is None else round(expected_c, 2),
-            "slippage_c": None if scored_price_c is None else
-                          round((avg_price_c - scored_price_c) * a["count"], 2),
+            "slippage_c": (round(a["cost_c"] - a["scored_notional_c"], 2)
+                           if fully_matched else None),
+            "n_fills": a["n_fills"], "n_matched_fills": a["n_matched"],
             "first_fill": a["first_fill"].isoformat() if a["first_fill"] else None,
-            "settled_at": (settled_at.get(ticker).isoformat()
-                           if settled_at.get(ticker) else None),
-            "matched": sig is not None,
-            "city": (sig or {}).get("city"),
-            "settlement_date": (sig or {}).get("settlement_date"),
-            "prob_estimate": (sig or {}).get("prob_estimate"),
-            "edge_raw": (sig or {}).get("edge_raw"),
-            "run_ts": (sig or {}).get("run_ts"),
+            "settled_at": ((st or {}).get("at").isoformat()
+                           if (st or {}).get("at") else None),
+            "matched": fully_matched,
+            "city": (a["sig"] or {}).get("city"),
+            "settlement_date": (a["sig"] or {}).get("settlement_date"),
+            "prob_estimate": (a["sig"] or {}).get("prob_estimate"),
+            "edge_raw": (a["sig"] or {}).get("edge_raw"),
+            "run_ts": (a["sig"] or {}).get("run_ts"),
         })
     return rows
 
@@ -304,22 +391,36 @@ def summarise(rows: list[dict]) -> dict:
         w = weeks.setdefault(week_of(r), {
             "n": 0, "contracts": 0, "realized_c": 0.0, "claimed_c": 0.0,
             "expected_c": 0.0, "slippage_c": 0.0, "fee_c": 0.0,
-            "unmatched": 0, "no_expected": 0})
+            "n_attributed": 0, "unattributed_realized_c": 0.0, "n_unattributed": 0,
+            "open_cost_c": 0.0, "n_open": 0})
         w["n"] += 1
         w["contracts"] += r["count"]
+
+        if not r["settled"]:
+            # Still open: no payout exists yet. Booking it as a zero-revenue loss
+            # would report an unsettled position as a total loss.
+            w["open_cost_c"] += r["cost_c"] + r["fee_c"]
+            w["n_open"] += 1
+            continue
+
+        if r["expected_c"] is None:
+            # Settled, but some fill had no decision behind it (a manual trade, a
+            # logging gap, or a signal with no probability). Its realized P&L is
+            # real and belongs in the total — but it has no expected/claimed
+            # counterpart, so including it would break the decomposition.
+            w["unattributed_realized_c"] += r["realized_c"]
+            w["n_unattributed"] += 1
+            continue
+
+        w["n_attributed"] += 1
         w["realized_c"] += r["realized_c"]
         w["fee_c"] += r["fee_c"]
-        if r["claimed_c"] is None:
-            w["unmatched"] += 1
-        else:
-            w["claimed_c"] += r["claimed_c"]
-            w["slippage_c"] += r["slippage_c"]
-        if r["expected_c"] is None:
-            w["no_expected"] += 1
-        else:
-            w["expected_c"] += r["expected_c"]
+        w["claimed_c"] += r["claimed_c"]
+        w["slippage_c"] += r["slippage_c"]
+        w["expected_c"] += r["expected_c"]
+
     for w in weeks.values():
-        # Exact identity:
+        # Exact identity over the ATTRIBUTED rows only:
         #   expected − realized  =  model_error + slippage + fees
         # where model_error = expected − claimed  (the probability was wrong) and
         #       slippage + fees = claimed − realized  (execution cost).
@@ -328,6 +429,8 @@ def summarise(rows: list[dict]) -> dict:
         w["model_error_c"] = w["expected_c"] - w["claimed_c"]
         w["execution_c"] = w["claimed_c"] - w["realized_c"]
         w["gap_c"] = w["expected_c"] - w["realized_c"]
+        # Total money actually settled this week, attributed or not.
+        w["realized_total_c"] = w["realized_c"] + w["unattributed_realized_c"]
     return dict(sorted(weeks.items()))
 
 
@@ -342,12 +445,21 @@ def render(rows: list[dict], weeks: dict) -> str:
         L.append("   fills are on the same account as the key you signed with.)")
         return "\n".join(L)
 
-    matched = sum(1 for r in rows if r["matched"])
-    L.append(f"\n  {len(rows)} filled positions · {matched} matched to a logged signal · "
-             f"{len(rows) - matched} unmatched")
-    if len(rows) - matched:
-        L.append("  Unmatched = traded without a corresponding signals_log row "
-                 "(manual trade, or the log was not running).")
+    n_open = sum(1 for r in rows if not r["settled"])
+    n_unattr = sum(1 for r in rows if r["settled"] and r["expected_c"] is None)
+    n_attr = len(rows) - n_open - n_unattr
+    L.append(f"\n  {len(rows)} filled positions · {n_attr} attributed · "
+             f"{n_unattr} settled but unattributed · {n_open} still open")
+    if n_unattr:
+        L.append("  Unattributed = settled, but at least one fill had no decision")
+        L.append("  behind it (manual trade, logging gap, or no probability logged).")
+        L.append("  Their P&L is real and reported, but excluded from the split below.")
+    if n_open:
+        L.append("  Open = no settlement yet. Cost is at risk; no P&L exists to book.")
+    srcs = {r["fee_source"] for r in rows if r.get("fee_source")}
+    if srcs and srcs != {"api"}:
+        L.append(f"  Fees: {'/'.join(sorted(srcs))} — 'model' rows use the repo's own "
+                 "0.07·p·(1−p) schedule, not what the exchange charged.")
 
     L.append("")
     L.append(f"  {'week':<10} {'n':>3} {'ctr':>5} {'expect$':>9} {'claim$':>9} "
@@ -362,7 +474,9 @@ def render(rows: list[dict], weeks: dict) -> str:
                  f"{w['slippage_c']/100:>+8.2f} {w['fee_c']/100:>7.2f} "
                  f"{w['gap_c']/100:>+9.2f}")
         for k in ("n", "contracts", "expected_c", "claimed_c", "realized_c",
-                  "gap_c", "slippage_c", "fee_c", "model_error_c", "execution_c"):
+                  "gap_c", "slippage_c", "fee_c", "model_error_c", "execution_c",
+                  "unattributed_realized_c", "open_cost_c", "n_attributed",
+                  "n_unattributed", "n_open"):
             tot[k] += w[k]
     L.append(f"  {'-'*10} {'-'*3} {'-'*5} {'-'*9} {'-'*9} {'-'*9} | "
              f"{'-'*9} {'-'*8} {'-'*7} {'-'*9}")
@@ -372,6 +486,22 @@ def render(rows: list[dict], weeks: dict) -> str:
              f"{tot['slippage_c']/100:>+8.2f} {tot['fee_c']/100:>7.2f} "
              f"{tot['gap_c']/100:>+9.2f}")
 
+    if tot["unattributed_realized_c"] or tot["open_cost_c"]:
+        L.append("")
+        if tot["unattributed_realized_c"]:
+            L.append(f"  Settled but unattributed ({int(tot['n_unattributed'])} positions): "
+                     f"{tot['unattributed_realized_c']/100:+.2f} realized — real money, "
+                     "no decision to attribute it to.")
+            L.append(f"  TOTAL REALIZED, all settled positions: "
+                     f"{(tot['realized_c'] + tot['unattributed_realized_c'])/100:+.2f}")
+        if tot["open_cost_c"]:
+            L.append(f"  Still open ({int(tot['n_open'])} positions): "
+                     f"{tot['open_cost_c']/100:.2f} at risk, not yet settled.")
+
+    L.append("")
+    L.append("  Rows above are the ATTRIBUTED positions only — settled, and every fill")
+    L.append("  joined to the decision that stood when it happened. The identity")
+    L.append("  gap = model + slip + fees holds exactly over those and only those.")
     L.append("")
     L.append("  expect$  what the model said it would make: its own probability at the")
     L.append("           price it scored — EV at decision time")
@@ -397,11 +527,6 @@ def render(rows: list[dict], weeks: dict) -> str:
             L.append(f"  Gap attribution: model {share(tot['model_error_c']):.0f}% · "
                      f"slippage {share(tot['slippage_c']):.0f}% · "
                      f"fees {share(tot['fee_c']):.0f}%")
-    if any(w["no_expected"] for w in weeks.values()):
-        L.append("")
-        L.append("  NOTE: some positions had no prob_estimate on the matched signal, so")
-        L.append("  they contribute to claim$/real$ but not expect$ — model$ is a")
-        L.append("  lower bound on those weeks.")
     return "\n".join(L)
 
 
